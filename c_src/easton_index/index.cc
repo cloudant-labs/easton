@@ -123,6 +123,7 @@ geos_notice(const char *fmt, ...) {
     return;
 }
 
+
 static void
 geos_error(const char *fmt, ...) {
     exit(EASTON_ERROR_GEOS_EXCEPTION);
