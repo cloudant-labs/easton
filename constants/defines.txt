@@ -1,0 +1,55 @@
+
+
+# Port IO Streams
+STREAM_IN               3
+STREAM_OUT              4
+
+
+# Paths
+DEFAULT_CS_MAP_DIR      "/usr/local/share/csmap/dict"
+
+
+# Success Exit
+OK                      0
+
+# Error Exits
+ERROR_BAD_WRITE         1
+ERROR_BAD_READ          2
+ERROR_BAD_ALLOC         3
+ERROR_BAD_ARGS          4
+ERROR_BAD_DIRECTORY     5
+ERROR_BAD_ID_IDX_INIT   6
+ERROR_BAD_GEO_IDX_INIT  7
+ERROR_CORRUPT_GEO_IDX   8
+ERROR_BAD_GEOS_INIT     9
+ERROR_GEOS_EXCEPTION    10
+ERROR_BAD_COMMAND       11
+ERROR_BAD_CLOSE         12
+ERROR_CLOSE_FAIL        13
+ERROR_BAD_FLUSH         14
+ERROR_FLUSH_FAIL        15
+
+# Filenames
+FILE_ID_IDX             "id_idx.tch"
+FILE_GEO_IDX            "geo_idx"
+
+
+# Index Types
+INDEX_TYPE_RTREE        1
+INDEX_TYPE_TPRTREE      2
+
+
+# Commands
+COMMAND_CLOSE           1
+COMMAND_FLUSH           2
+COMMAND_GET_USER_KV     3
+COMMAND_PUT_USER_KV     4
+COMMAND_DEL_USER_KV     5
+COMMAND_INSERT_ENTRY    6
+COMMAND_DELETE_ENTRY    7
+COMMAND_DOC_COUNT       8
+COMMAND_QUERY           9
+COMMAND_QUERY_TP        10
+COMMAND_NEAREST         11
+COMMAND_NEAREST_TP      12
+

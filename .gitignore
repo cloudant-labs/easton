@@ -1,0 +1,7 @@
+*.o
+
+.eunit/
+.rebar/
+ebin/
+priv/easton_index
+

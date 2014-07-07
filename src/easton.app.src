@@ -1,0 +1,6 @@
+{application, easton, [
+    {description, "External port based spatial indexing."},
+    {vsn, git},
+    {registered, []},
+    {applications, [kernel, stdlib]}
+]}.
