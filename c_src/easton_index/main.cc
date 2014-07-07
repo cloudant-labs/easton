@@ -10,15 +10,15 @@
 int
 main(int argc, const char* argv[])
 {
-    unsigned char* cmd_buf;
-    size_t cmd_len;
+    uint8_t* cmd;
+    uint32_t cmdlen;
 
     easton_init();
-    easton_idx_t* idx = easton_index_init(argc, argv);
+    easton_idx_t* idx = easton_index_init(argc, (const int8_t**) argv);
 
-    while(easton_read_data(&cmd_buf, &cmd_len)) {
-        easton_handle_command(idx, cmd_buf, cmd_len);
-        free(cmd_buf);
+    while(easton_read_data(&cmd, &cmdlen)) {
+        easton_handle_command(idx, cmd, cmdlen);
+        free(cmd);
     }
 
     return 0;

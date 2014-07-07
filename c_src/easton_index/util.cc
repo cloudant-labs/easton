@@ -7,40 +7,59 @@
 
 
 bool
-easton_is_dir(const char* path)
+easton_is_dir(const int8_t* path)
 {
     bool is_dir;
-    
-    if(!tcstatfile(path, &is_dir, NULL, NULL)) {
+
+    if(!tcstatfile((const char*) path, &is_dir, NULL, NULL)) {
         return false;
     }
-    
+
     return is_dir;
 }
 
 
 bool
-easton_read_binary(const unsigned char** cmd, size_t* cmdlen,
-    const void** buf, size_t* buflen)
+easton_read_uint16(const uint8_t** cmd, uint32_t* cmdlen, uint16_t* ret)
 {
-    unsigned int len;
-    
-    if(*cmdlen < sizeof(unsigned int)) {
+    uint16_t op;
+
+    if(*cmdlen < sizeof(op)) {
         return false;
     }
 
-    memcpy(&len, *cmd, sizeof(unsigned int));
+    memcpy(&op, *cmd, sizeof(op));
+    op = ntohs(op);
+
+    *cmd += sizeof(op);
+    *cmdlen -= sizeof(op);
+    *ret = op;
+
+    return true;
+}
+
+bool
+easton_read_binary(const uint8_t** cmd, uint32_t* cmdlen,
+    const void** buf, uint32_t* buflen)
+{
+    uint32_t len;
+
+    if(*cmdlen < sizeof(uint32_t)) {
+        return false;
+    }
+
+    memcpy(&len, *cmd, sizeof(uint32_t));
     len = ntohl(len);
 
-    *buf = *cmd + sizeof(unsigned int);    
-    *buflen = (size_t) len;
+    *buf = *cmd + sizeof(uint32_t);
+    *buflen = len;
 
     if(*buflen > *cmdlen) {
         return false;
     }
 
-    *cmd += *buflen + sizeof(unsigned int);
-    *cmdlen -= *buflen + sizeof(unsigned int);
+    *cmd += *buflen + sizeof(uint32_t);
+    *cmdlen -= *buflen + sizeof(uint32_t);
 
     return true;
 }

@@ -9,8 +9,8 @@
 #include "util.hh"
 
 
-static char*
-get_base_dir(const char* dirname)
+static int8_t*
+get_base_dir(const int8_t* dirname)
 {
     char* ret = tcstrdup(dirname);
     TCXSTR* tmp;
@@ -25,33 +25,33 @@ get_base_dir(const char* dirname)
         tcxstrdel(tmp);
     }
 
-    return ret;
+    return (int8_t*) ret;
 }
 
 
-static char*
-get_file_name(const char* base_dir, const char* name)
+static int8_t*
+get_file_name(const int8_t* base_dir, const int8_t* name)
 {
     TCXSTR* tmp;
     char* ret;
 
-    tmp = tcxstrnew2(base_dir);
+    tmp = tcxstrnew2((char*) base_dir);
     tcxstrcat2(tmp, "/");
-    tcxstrcat2(tmp, name);
+    tcxstrcat2(tmp, (char*) name);
     ret = tcstrdup((char*) tcxstrptr(tmp));
 
     tcxstrdel(tmp);
-    return ret;
+    return (int8_t*) ret;
 }
 
 
 static void
 init_id_idx(easton_idx_t* idx)
 {
-    int flags = HDBOWRITER | HDBOCREAT;
+    int32_t flags = HDBOWRITER | HDBOCREAT;
 
     idx->id_idx = tchdbnew();
-    if(!tchdbopen(idx->id_idx, idx->id_idx_file, flags)) {
+    if(!tchdbopen(idx->id_idx, (char*) idx->id_idx_file, flags)) {
         exit(EASTON_ERROR_BAD_ID_IDX_INIT);
     }
 
@@ -61,19 +61,19 @@ init_id_idx(easton_idx_t* idx)
 
 
 static void
-init_geo_idx(easton_idx_t* idx, int argc, const char* argv[])
+init_geo_idx(easton_idx_t* idx, int32_t argc, const int8_t* argv[])
 {
     IndexPropertyH props = IndexProperty_Create();
 
-    int64_t idx_type = tcatoi(argv[2]);
-    int64_t dims = tcatoi(argv[3]);
-    int64_t limit = tcatoi(argv[4]);
+    int64_t idx_type = tcatoi((const char*) argv[2]);
+    int64_t dims = tcatoi((const char*) argv[3]);
+    int64_t limit = tcatoi((const char*) argv[4]);
 
     RTIndexType it;
 
     idx->dimensions = dims;
 
-    if(IndexProperty_SetFileName(props, idx->geo_idx_file) != RT_None) {
+    if(IndexProperty_SetFileName(props, (char*) idx->geo_idx_file) != RT_None) {
         exit(EASTON_ERROR_BAD_GEO_IDX_INIT);
     }
 
@@ -97,7 +97,7 @@ init_geo_idx(easton_idx_t* idx, int argc, const char* argv[])
         exit(EASTON_ERROR_BAD_GEO_IDX_INIT);
     }
 
-    if(IndexProperty_SetDimension(props, (unsigned int) dims) != RT_None) {
+    if(IndexProperty_SetDimension(props, (uint32_t) dims) != RT_None) {
         exit(EASTON_ERROR_BAD_GEO_IDX_INIT);
     }
 
@@ -119,13 +119,13 @@ init_geo_idx(easton_idx_t* idx, int argc, const char* argv[])
 
 
 static void
-geos_notice(const char *fmt, ...) {
+geos_notice(const char* fmt, ...) {
     return;
 }
 
 
 static void
-geos_error(const char *fmt, ...) {
+geos_error(const char* fmt, ...) {
     exit(EASTON_ERROR_GEOS_EXCEPTION);
 }
 
@@ -139,7 +139,7 @@ init_geos(easton_idx_t* idx)
 
 
 easton_idx_t*
-easton_index_init(int argc, const char* argv[])
+easton_index_init(int32_t argc, const int8_t* argv[])
 {
     easton_idx_t* idx = (easton_idx_t*) malloc(sizeof(easton_idx_t));
 
@@ -156,8 +156,10 @@ easton_index_init(int argc, const char* argv[])
     }
 
     idx->base_dir = get_base_dir(argv[1]);
-    idx->id_idx_file = get_file_name(idx->base_dir, EASTON_FILE_ID_IDX);
-    idx->geo_idx_file = get_file_name(idx->base_dir, EASTON_FILE_GEO_IDX);
+    idx->id_idx_file = get_file_name(idx->base_dir,
+            (int8_t*) EASTON_FILE_ID_IDX);
+    idx->geo_idx_file = get_file_name(idx->base_dir,
+            (int8_t*) EASTON_FILE_GEO_IDX);
 
     init_id_idx(idx);
     init_geo_idx(idx, argc, argv);
@@ -202,37 +204,37 @@ easton_index_flush(easton_idx_t* idx)
 
 bool
 easton_index_put_kv(easton_idx_t* idx,
-        void* key, size_t klen, void* val, size_t vlen)
+        void* key, uint32_t klen, void* val, uint32_t vlen)
 {
-    return tchdbput(idx->id_idx, key, (int) klen, val, (int) vlen);
+    return tchdbput(idx->id_idx, key, (int32_t) klen, val, (int32_t) vlen);
 }
 
 
-char*
-easton_index_get_kv(easton_idx_t* idx, void* key, size_t klen, size_t* vlen)
+uint8_t*
+easton_index_get_kv(easton_idx_t* idx, void* key, uint32_t klen, uint32_t* vlen)
 {
-    char* val;
-    int len;
-    
-    len = tchdbvsiz(idx->id_idx, key, (int) klen);
+    uint8_t* val;
+    int32_t len;
+
+    len = tchdbvsiz(idx->id_idx, key, (int32_t) klen);
     if(len < 0) {
         return NULL;
     }
-    
-    *vlen = (size_t) len;
-    val = (char*) malloc((size_t) *vlen);
-    
-    if(tchdbget3(idx->id_idx, key, (int) klen, val, *vlen) < 0) {
+
+    *vlen = (uint32_t) len;
+    val = (uint8_t*) malloc((uint32_t) *vlen);
+
+    if(tchdbget3(idx->id_idx, key, (int32_t) klen, val, *vlen) < 0) {
         free(val);
         return NULL;
     }
-    
+
     return val;
 }
 
 
 bool
-easton_index_del_kv(easton_idx_t* idx, void* key, size_t klen)
+easton_index_del_kv(easton_idx_t* idx, void* key, uint32_t klen)
 {
-    return tchdbout(idx->id_idx, key, (int) klen);
+    return tchdbout(idx->id_idx, key, (int32_t) klen);
 }

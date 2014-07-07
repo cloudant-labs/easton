@@ -12,20 +12,20 @@
 static void
 report_pid()
 {
-    int p = htonl((unsigned int) getpid());
-    easton_send_data((unsigned char*) &p, sizeof(p));
+    uint32_t p = htonl((uint32_t) getpid());
+    easton_send_data((uint8_t*) &p, sizeof(p));
 }
 
 
 static void
 init_csmap()
 {
-    const char* map_dir = getenv("EASTON_CS_MAP_DIR");
+    const int8_t* map_dir = (int8_t*) getenv("EASTON_CS_MAP_DIR");
 
 	if(map_dir != NULL) {
-        CS_altdr(map_dir);
+        CS_altdr((char*) map_dir);
     } else {
-        CS_altdr(EASTON_DEFAULT_CS_MAP_DIR);
+        CS_altdr((char*) EASTON_DEFAULT_CS_MAP_DIR);
     }
 
 	CS_init(0);

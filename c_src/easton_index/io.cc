@@ -9,22 +9,22 @@
 
 
 bool
-easton_read_data(unsigned char** data, size_t* len)
+easton_read_data(uint8_t** data, uint32_t* len)
 {
-    unsigned int packet_len;
-    unsigned char* buf;
-    ssize_t ret;
+    uint32_t packet_len;
+    uint8_t* buf;
+    uint32_t ret;
 
-    ret = read(EASTON_STREAM_IN, &packet_len, sizeof(unsigned int));
+    ret = read(EASTON_STREAM_IN, &packet_len, sizeof(uint32_t));
     if(ret == 0) {
         return false;
-    } else if(ret != sizeof(unsigned int)) {
+    } else if(ret != sizeof(uint32_t)) {
         exit(EASTON_ERROR_BAD_READ);
     }
 
     packet_len = ntohl(packet_len);
 
-    buf = (unsigned char*) malloc(packet_len);
+    buf = (uint8_t*) malloc(packet_len);
     if(buf == NULL) {
         exit(EASTON_ERROR_BAD_ALLOC);
     }
@@ -42,13 +42,13 @@ easton_read_data(unsigned char** data, size_t* len)
 
 
 void
-easton_send_data(unsigned char* data, size_t len)
+easton_send_data(uint8_t* data, uint32_t len)
 {
-    unsigned int packet_len = htonl((unsigned int) len);
-    ssize_t ret;
+    uint32_t packet_len = htonl((uint32_t) len);
+    uint32_t ret;
 
-    ret = write(EASTON_STREAM_OUT, &packet_len, sizeof(unsigned int));
-    if(ret != sizeof(unsigned int)) {
+    ret = write(EASTON_STREAM_OUT, &packet_len, sizeof(uint32_t));
+    if(ret != sizeof(uint32_t)) {
         exit(EASTON_ERROR_BAD_WRITE);
     }
 
@@ -60,20 +60,18 @@ easton_send_data(unsigned char* data, size_t len)
 
 
 void
-easton_send_resp(unsigned char code, unsigned char* data, size_t len)
+easton_send_resp(uint8_t code, uint8_t* data, uint32_t len)
 {
-    unsigned int packet_len = htonl((unsigned int) (len + 1));
+    uint32_t packet_len = htonl((uint32_t) (len + 1));
     ssize_t ret;
 
-    ret = write(EASTON_STREAM_OUT, &packet_len, sizeof(unsigned int));
-    if(ret != sizeof(unsigned int)) {
-        fprintf(stderr, "1\r\n");
+    ret = write(EASTON_STREAM_OUT, &packet_len, sizeof(uint32_t));
+    if(ret != sizeof(uint32_t)) {
         exit(EASTON_ERROR_BAD_WRITE);
     }
 
     ret = write(EASTON_STREAM_OUT, &code, 1);
     if(ret != 1) {
-        fprintf(stderr, "2\r\n");
         exit(EASTON_ERROR_BAD_WRITE);
     }
 
@@ -83,21 +81,20 @@ easton_send_resp(unsigned char code, unsigned char* data, size_t len)
 
     ret = write(EASTON_STREAM_OUT, data, len);
     if(ret != len) {
-        fprintf(stderr, "3\r\n");
         exit(EASTON_ERROR_BAD_WRITE);
     }
 }
 
 
 void
-easton_send_ok(unsigned char* data, size_t len)
+easton_send_ok(uint8_t* data, uint32_t len)
 {
     easton_send_resp(0, data, len);
 }
 
 
 void
-easton_send_error(unsigned char* data, size_t len)
+easton_send_error(uint8_t* data, uint32_t len)
 {
     easton_send_resp(1, data, len);
 }

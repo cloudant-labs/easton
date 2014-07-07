@@ -6,8 +6,9 @@
 #include <stdbool.h>
 
 
-bool easton_is_dir(const char* path);
-bool easton_read_binary(const unsigned char** cmd, size_t* cmdlen,
-        const void** buf, size_t* buflen);
+bool easton_is_dir(const int8_t* path);
+bool easton_read_uint16(const uint8_t** cmd, uint32_t* cmdlen, uint16_t* ret);
+bool easton_read_binary(const uint8_t** cmd, uint32_t* cmdlen,
+        const void** buf, uint32_t* buflen);
 
 #endif

@@ -8,7 +8,7 @@
 
 
 static void
-close_idx(easton_idx_t* idx, const unsigned char* cmd, size_t cmdlen)
+close_idx(easton_idx_t* idx, const uint8_t* cmd, uint32_t cmdlen)
 {
     if(cmdlen != 0) {
         exit(EASTON_ERROR_TRAILING_DATA);
@@ -25,7 +25,7 @@ close_idx(easton_idx_t* idx, const unsigned char* cmd, size_t cmdlen)
 
 
 static void
-flush_idx(easton_idx_t* idx, const unsigned char* cmd, size_t cmdlen)
+flush_idx(easton_idx_t* idx, const uint8_t* cmd, uint32_t cmdlen)
 {
     if(cmdlen != 0) {
         exit(EASTON_ERROR_TRAILING_DATA);
@@ -34,23 +34,23 @@ flush_idx(easton_idx_t* idx, const unsigned char* cmd, size_t cmdlen)
     if(!easton_index_flush(idx)) {
         exit(EASTON_ERROR_FLUSH_FAIL);
     }
-    
+
     easton_send_ok(NULL, 0);
 }
 
 
 static void
-put_user_kv(easton_idx_t* idx, const unsigned char* cmd, size_t cmdlen)
+put_user_kv(easton_idx_t* idx, const uint8_t* cmd, uint32_t cmdlen)
 {
-    unsigned char* key = NULL;
-    unsigned char* val = NULL;
-    size_t klen;
-    size_t vlen;
+    uint8_t* key = NULL;
+    uint8_t* val = NULL;
+    uint32_t klen;
+    uint32_t vlen;
 
     if(!easton_read_binary(&cmd, &cmdlen, (const void**) &key, &klen)) {
         exit(EASTON_ERROR_BAD_USER_KEY);
     }
-    
+
     if(!easton_read_binary(&cmd, &cmdlen, (const void**) &val, &vlen)) {
         exit(EASTON_ERROR_BAD_USER_VAL);
     }
@@ -58,22 +58,22 @@ put_user_kv(easton_idx_t* idx, const unsigned char* cmd, size_t cmdlen)
     if(cmdlen != 0) {
         exit(EASTON_ERROR_TRAILING_DATA);
     }
-    
+
     if(!easton_index_put_kv(idx, key, klen, val, vlen)) {
         exit(EASTON_ERROR_BAD_PUT_USER_KV);
     }
-    
+
     easton_send_ok(NULL, 0);
 }
 
 
 static void
-get_user_kv(easton_idx_t* idx, const unsigned char* cmd, size_t cmdlen)
+get_user_kv(easton_idx_t* idx, const uint8_t* cmd, uint32_t cmdlen)
 {
-    unsigned char* key;
-    unsigned char* val;
-    size_t klen;
-    size_t vlen;
+    uint8_t* key;
+    uint8_t* val;
+    uint32_t klen;
+    uint32_t vlen;
 
     if(!easton_read_binary(&cmd, &cmdlen, (const void**) &key, &klen)) {
         exit(EASTON_ERROR_BAD_USER_KEY);
@@ -82,8 +82,8 @@ get_user_kv(easton_idx_t* idx, const unsigned char* cmd, size_t cmdlen)
     if(cmdlen != 0) {
         exit(EASTON_ERROR_TRAILING_DATA);
     }
-    
-    val = (unsigned char*) easton_index_get_kv(idx, key, klen, &vlen);
+
+    val = (uint8_t*) easton_index_get_kv(idx, key, klen, &vlen);
     if(val != NULL) {
         easton_send_ok(val, vlen);
         free(val);
@@ -94,10 +94,10 @@ get_user_kv(easton_idx_t* idx, const unsigned char* cmd, size_t cmdlen)
 
 
 static void
-del_user_kv(easton_idx_t* idx, const unsigned char* cmd, size_t cmdlen)
+del_user_kv(easton_idx_t* idx, const uint8_t* cmd, uint32_t cmdlen)
 {
-    unsigned char* key;
-    size_t klen;
+    uint8_t* key;
+    uint32_t klen;
 
     if(!easton_read_binary(&cmd, &cmdlen, (const void**) &key, &klen)) {
         exit(EASTON_ERROR_BAD_USER_KEY);
@@ -116,21 +116,13 @@ del_user_kv(easton_idx_t* idx, const unsigned char* cmd, size_t cmdlen)
 
 
 void
-easton_handle_command(easton_idx_t* idx,
-        const unsigned char* cmd, size_t cmdlen)
+easton_handle_command(easton_idx_t* idx, const uint8_t* cmd, uint32_t cmdlen)
 {
-    int op;
+    uint16_t op;
 
-    if(cmdlen < 4) {
+    if(!easton_read_uint16(&cmd, &cmdlen, &op)) {
         exit(EASTON_ERROR_BAD_COMMAND);
     }
-
-    memcpy(&op, cmd, 4);
-    op = ntohl(op);
-
-    // Bump to after the op code
-    cmd += 4;
-    cmdlen -= 4;
 
     switch(op) {
         case EASTON_COMMAND_CLOSE:

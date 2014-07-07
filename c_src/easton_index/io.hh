@@ -6,10 +6,10 @@
 #include <unistd.h>
 
 
-bool easton_read_data(unsigned char** data, size_t* len);
-void easton_send_data(unsigned char* data, size_t len);
-void easton_send_ok(unsigned char* data, size_t len);
-void easton_send_error(unsigned char* data, size_t len);
+bool easton_read_data(uint8_t** data, uint32_t* len);
+void easton_send_data(uint8_t* data, uint32_t len);
+void easton_send_ok(uint8_t* data, uint32_t len);
+void easton_send_error(uint8_t* data, uint32_t len);
 
 
 #endif

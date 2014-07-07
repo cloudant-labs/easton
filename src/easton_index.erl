@@ -6,7 +6,7 @@
     open/2,
     close/1,
     flush/1,
-    
+
     put/3,
     get/2,
     get/3,
@@ -166,11 +166,11 @@ handle_call(close, _From, #st{closing = true} = St) ->
     {reply, ok, St};
 
 handle_call(close, From, #st{closing = false} = St) ->
-    Packet = <<?EASTON_COMMAND_CLOSE:32/integer>>,
+    Packet = <<?EASTON_COMMAND_CLOSE:16/integer>>,
     handle_call({packet, Packet}, From, St#st{closing = true});
 
 handle_call({packet, P}, _From, #st{port = Port} = St) ->
-    %io:format(standard_error, "Packet: ~p: ~p~n", [size(P), P]),
+    %io:format(standard_error, "~nPacket: ~p: ~p~n", [size(P), P]),
     true = erlang:port_command(St#st.port, P),
     receive
         {Port, {data, <<0:8/integer, Bin/binary>>}} ->
@@ -206,7 +206,7 @@ code_change(_Vsn, St, _Extra) ->
 
 
 cmd(Index, OpCode, Payload) ->
-    Packet = <<OpCode:32/integer, Payload/binary>>,
+    Packet = <<OpCode:16/integer, Payload/binary>>,
     gen_server:call(Index, {packet, Packet}, infinity).
 
 

@@ -7,7 +7,7 @@
 
 
 void easton_handle_command(easton_idx_t* idx,
-        const unsigned char* cmd, size_t cmdlen);
+        const uint8_t* cmd, uint32_t cmdlen);
 
 
 #endif
