@@ -9,7 +9,7 @@
 #include "util.hh"
 
 
-char*
+static char*
 get_base_dir(const char* dirname)
 {
     char* ret = tcstrdup(dirname);
@@ -29,7 +29,7 @@ get_base_dir(const char* dirname)
 }
 
 
-char*
+static char*
 get_file_name(const char* base_dir, const char* name)
 {
     TCXSTR* tmp;
@@ -45,7 +45,7 @@ get_file_name(const char* base_dir, const char* name)
 }
 
 
-void
+static void
 init_id_idx(easton_idx_t* idx)
 {
     int flags = HDBOWRITER | HDBOCREAT;
@@ -60,7 +60,7 @@ init_id_idx(easton_idx_t* idx)
 }
 
 
-void
+static void
 init_geo_idx(easton_idx_t* idx, int argc, const char* argv[])
 {
     IndexPropertyH props = IndexProperty_Create();
@@ -118,18 +118,18 @@ init_geo_idx(easton_idx_t* idx, int argc, const char* argv[])
 }
 
 
-void
+static void
 geos_notice(const char *fmt, ...) {
     return;
 }
 
-void
+static void
 geos_error(const char *fmt, ...) {
     exit(EASTON_ERROR_GEOS_EXCEPTION);
 }
 
 
-void
+static void
 init_geos(easton_idx_t* idx)
 {
     idx->geos_ctx = initGEOS_r(geos_notice, geos_error);
