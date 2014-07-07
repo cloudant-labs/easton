@@ -198,3 +198,41 @@ easton_index_flush(easton_idx_t* idx)
 
     return true;
 }
+
+
+bool
+easton_index_put_kv(easton_idx_t* idx,
+        void* key, size_t klen, void* val, size_t vlen)
+{
+    return tchdbput(idx->id_idx, key, (int) klen, val, (int) vlen);
+}
+
+
+char*
+easton_index_get_kv(easton_idx_t* idx, void* key, size_t klen, size_t* vlen)
+{
+    char* val;
+    int len;
+    
+    len = tchdbvsiz(idx->id_idx, key, (int) klen);
+    if(len < 0) {
+        return NULL;
+    }
+    
+    *vlen = (size_t) len;
+    val = (char*) malloc((size_t) *vlen);
+    
+    if(tchdbget3(idx->id_idx, key, (int) klen, val, *vlen) < 0) {
+        free(val);
+        return NULL;
+    }
+    
+    return val;
+}
+
+
+bool
+easton_index_del_kv(easton_idx_t* idx, void* key, size_t klen)
+{
+    return tchdbout(idx->id_idx, key, (int) klen);
+}

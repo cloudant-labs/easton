@@ -5,7 +5,12 @@
     open/1,
     open/2,
     close/1,
-    flush/1
+    flush/1,
+    
+    put/3,
+    get/2,
+    get/3,
+    del/2
 
     % insert/3,
     % delete/2,
@@ -87,7 +92,60 @@ flush(Index) ->
         Else ->
             throw({bad_flush, Else})
     end.
-    
+
+
+put(Index, Key, Value) ->
+    KBin0 = term_to_binary(Key, [{minor_version, 1}]),
+    KBin = <<"user:", KBin0/binary>>,
+    KLen = size(KBin),
+    VBin = term_to_binary(Value, [{minor_version, 1}]),
+    VLen = size(VBin),
+    Payload = <<KLen:32/integer, KBin/binary, VLen:32/integer, VBin/binary>>,
+    case cmd(Index, ?EASTON_COMMAND_PUT_USER_KV, Payload) of
+        {ok, <<>>} ->
+            ok;
+        Else ->
+            throw({bad_put, Else})
+    end.
+
+
+get(Index, Key) ->
+    KBin0 = term_to_binary(Key, [{minor_version, 1}]),
+    KBin = <<"user:", KBin0/binary>>,
+    KLen = size(KBin),
+    Payload = <<KLen:32/integer, KBin/binary>>,
+    case cmd(Index, ?EASTON_COMMAND_GET_USER_KV, Payload) of
+        {ok, VBin} ->
+            {Key, binary_to_term(VBin, [safe])};
+        {error, <<>>} ->
+            false;
+        Else ->
+            throw({bad_get, Else})
+    end.
+
+
+get(Index, Key, Default) ->
+    case ?MODULE:get(Index, Key) of
+        {Key, Value} ->
+            Value;
+        false ->
+            Default
+    end.
+
+
+del(Index, Key) ->
+    KBin0 = term_to_binary(Key, [{minor_version, 1}]),
+    KBin = <<"user:", KBin0/binary>>,
+    KLen = size(KBin),
+    Payload = <<KLen:32/integer, KBin/binary>>,
+    case cmd(Index, ?EASTON_COMMAND_DEL_USER_KV, Payload) of
+        {ok, <<>>} ->
+            true;
+        {error, <<>>} ->
+            false;
+        Else ->
+            throw({bad_del, Else})
+    end.
 
 
 init(Opts) ->
@@ -112,6 +170,7 @@ handle_call(close, From, #st{closing = false} = St) ->
     handle_call({packet, Packet}, From, St#st{closing = true});
 
 handle_call({packet, P}, _From, #st{port = Port} = St) ->
+    %io:format(standard_error, "Packet: ~p: ~p~n", [size(P), P]),
     true = erlang:port_command(St#st.port, P),
     receive
         {Port, {data, <<0:8/integer, Bin/binary>>}} ->
@@ -148,7 +207,7 @@ code_change(_Vsn, St, _Extra) ->
 
 cmd(Index, OpCode, Payload) ->
     Packet = <<OpCode:32/integer, Payload/binary>>,
-    gen_server:call(Index, {packet, Packet}).
+    gen_server:call(Index, {packet, Packet}, infinity).
 
 
 kill_monitor(Pid, OsPid) ->
