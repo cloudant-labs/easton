@@ -9,6 +9,9 @@
 #include "util.hh"
 
 
+#define DOC_ID_NUM_KEY "meta:doc_id_num"
+
+
 static int8_t*
 get_base_dir(const int8_t* dirname)
 {
@@ -49,14 +52,21 @@ static void
 init_id_idx(easton_idx_t* idx)
 {
     int32_t flags = HDBOWRITER | HDBOCREAT;
+    int doc_id_num;
 
     idx->id_idx = tchdbnew();
     if(!tchdbopen(idx->id_idx, (char*) idx->id_idx_file, flags)) {
         exit(EASTON_ERROR_BAD_ID_IDX_INIT);
     }
 
-    // Get current doc id number from hash or
-    // set it to 0 in both places.
+    doc_id_num = tchdbaddint(idx->id_idx,
+            DOC_ID_NUM_KEY, strlen(DOC_ID_NUM_KEY), 0);
+
+    if(doc_id_num < 0) {
+        exit(EASTON_ERROR_BAD_ID_IDX_INIT);
+    }
+
+    idx->doc_id_num = (uint64_t) doc_id_num;
 }
 
 

@@ -22,7 +22,7 @@ typedef struct {
     GEOSContextHandle_t     geos_ctx;
 
     uint64_t                 dimensions;
-    uint32_t                 id_num;
+    uint64_t                 doc_id_num;
 } easton_idx_t;
 
 
