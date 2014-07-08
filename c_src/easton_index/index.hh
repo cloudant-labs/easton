@@ -30,6 +30,9 @@ easton_idx_t* easton_index_init(int32_t argc, const int8_t* argv[]);
 bool easton_index_close(easton_idx_t* idx);
 bool easton_index_flush(easton_idx_t* idx);
 
+uint64_t easton_index_get_doc_id_num(easton_idx_t* idx);
+uint64_t easton_index_get_doc_count(easton_idx_t* idx);
+
 bool easton_index_put_kv(easton_idx_t* idx,
         void* key, uint32_t klen, void* val, uint32_t vlen);
 uint8_t* easton_index_get_kv(easton_idx_t* idx,

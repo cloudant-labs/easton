@@ -40,6 +40,39 @@ flush_idx(easton_idx_t* idx, const uint8_t* cmd, uint32_t cmdlen)
 
 
 static void
+get_doc_id_num(easton_idx_t* idx, const uint8_t* cmd, uint32_t cmdlen)
+{
+    uint64_t doc_id_num;
+
+    if(cmdlen != 0) {
+        exit(EASTON_ERROR_TRAILING_DATA);
+    }
+
+    doc_id_num = easton_index_get_doc_id_num(idx);
+    easton_send_ok_uint64_t(doc_id_num);
+}
+
+
+static void
+get_doc_count(easton_idx_t* idx, const uint8_t* cmd, uint32_t cmdlen)
+{
+    uint64_t count;
+
+    if(cmdlen != 0) {
+        exit(EASTON_ERROR_TRAILING_DATA);
+    }
+
+    count = easton_index_get_doc_count(idx);
+
+    if(count != UINT64_MAX) {
+        easton_send_ok_uint64_t(count);
+    } else {
+        easton_send_error(NULL, 0);
+    }
+}
+
+
+static void
 put_user_kv(easton_idx_t* idx, const uint8_t* cmd, uint32_t cmdlen)
 {
     uint8_t* key = NULL;
@@ -130,6 +163,12 @@ easton_handle_command(easton_idx_t* idx, const uint8_t* cmd, uint32_t cmdlen)
             break;
         case EASTON_COMMAND_FLUSH:
             flush_idx(idx, cmd, cmdlen);
+            break;
+        case EASTON_COMMAND_GET_DOC_ID_NUM:
+            get_doc_id_num(idx, cmd, cmdlen);
+            break;
+        case EASTON_COMMAND_GET_DOC_COUNT:
+            get_doc_count(idx, cmd, cmdlen);
             break;
         case EASTON_COMMAND_PUT_USER_KV:
             put_user_kv(idx, cmd, cmdlen);

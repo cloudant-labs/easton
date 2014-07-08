@@ -94,6 +94,21 @@ easton_send_ok(uint8_t* data, uint32_t len)
 
 
 void
+easton_send_ok_uint64_t(uint64_t value)
+{
+    uint8_t msg[8];
+    uint32_t i;
+
+    // big-endian
+    for(i = 0; i < 8; i++) {
+        msg[8 - (i+1)] = (uint8_t) (((value) >> (i*8)) & 0xFF);
+    }
+
+    easton_send_ok(msg, 8);
+}
+
+
+void
 easton_send_error(uint8_t* data, uint32_t len)
 {
     easton_send_resp(1, data, len);

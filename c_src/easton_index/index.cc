@@ -212,6 +212,46 @@ easton_index_flush(easton_idx_t* idx)
 }
 
 
+uint64_t
+easton_index_get_doc_id_num(easton_idx_t* idx)
+{
+    return idx->doc_id_num;
+}
+
+
+uint64_t
+easton_index_get_doc_count(easton_idx_t* idx)
+{
+    double* mins = NULL;
+    double* maxs = NULL;
+    uint32_t dims;
+    uint64_t ret = UINT64_MAX;
+    uint64_t n;
+
+    if(Index_GetBounds(idx->geo_idx, &mins, &maxs, &dims) != RT_None) {
+        goto done;
+    }
+
+    if(Index_Intersects_count(idx->geo_idx, mins, maxs, dims, &n) != RT_None) {
+        goto done;
+    }
+
+    ret = n;
+
+done:
+
+    if(mins != NULL) {
+        free(mins);
+    }
+
+    if(maxs != NULL) {
+        free(maxs);
+    }
+
+    return ret;
+}
+
+
 bool
 easton_index_put_kv(easton_idx_t* idx,
         void* key, uint32_t klen, void* val, uint32_t vlen)

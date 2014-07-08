@@ -10,12 +10,13 @@
     put/3,
     get/2,
     get/3,
-    del/2
+    del/2,
+
+    doc_id_num/1,
+    doc_count/1
 
     % insert/3,
     % delete/2,
-    %
-    % doc_count/1,
     %
     % search/3,
     % search/4
@@ -91,6 +92,24 @@ flush(Index) ->
             ok;
         Else ->
             throw({bad_flush, Else})
+    end.
+
+
+doc_id_num(Index) ->
+    case cmd(Index, ?EASTON_COMMAND_GET_DOC_ID_NUM, <<>>) of
+        {ok, <<DocIdNum:64/integer>>} ->
+            {ok, DocIdNum};
+        Else ->
+            throw({bad_doc_id_num, Else})
+    end.
+
+
+doc_count(Index) ->
+    case cmd(Index, ?EASTON_COMMAND_GET_DOC_COUNT, <<>>) of
+        {ok, <<DocCount:64/integer>>} ->
+            {ok, DocCount};
+        Else ->
+            throw({bad_doc_count, Else})
     end.
 
 
