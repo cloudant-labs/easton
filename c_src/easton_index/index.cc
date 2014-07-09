@@ -125,6 +125,24 @@ init_geo_idx(easton_idx_t* idx, int32_t argc, const int8_t* argv[])
     }
 
     IndexProperty_Destroy(props);
+
+    // Verify the properties after open are the
+    // same as requested.
+
+    props = Index_GetProperties(idx->geo_idx);
+
+    // For some reason the properties returned from the
+    // tree don't set the index type.
+    //
+    // if(IndexProperty_GetIndexType(props) != it) {
+    //     exit(EASTON_ERROR_BAD_GEO_IDX_CFG);
+    // }
+
+    if(IndexProperty_GetDimension(props) != idx->dimensions) {
+        exit(EASTON_ERROR_BAD_GEO_IDX_CFG);
+    }
+
+    IndexProperty_Destroy(props);
 }
 
 
