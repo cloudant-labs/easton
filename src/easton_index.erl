@@ -114,12 +114,7 @@ doc_count(Index) ->
 
 
 put(Index, Key, Value) ->
-    KBin0 = term_to_binary(Key, [{minor_version, 1}]),
-    KBin = <<"user:", KBin0/binary>>,
-    KLen = size(KBin),
-    VBin = term_to_binary(Value, [{minor_version, 1}]),
-    VLen = size(VBin),
-    Payload = <<KLen:32/integer, KBin/binary, VLen:32/integer, VBin/binary>>,
+    Payload = to_payload([ukey(Key), t2b(Value)]),
     case cmd(Index, ?EASTON_COMMAND_PUT_USER_KV, Payload) of
         {ok, <<>>} ->
             ok;
@@ -129,10 +124,7 @@ put(Index, Key, Value) ->
 
 
 get(Index, Key) ->
-    KBin0 = term_to_binary(Key, [{minor_version, 1}]),
-    KBin = <<"user:", KBin0/binary>>,
-    KLen = size(KBin),
-    Payload = <<KLen:32/integer, KBin/binary>>,
+    Payload = to_payload([ukey(Key)]),
     case cmd(Index, ?EASTON_COMMAND_GET_USER_KV, Payload) of
         {ok, VBin} ->
             {Key, binary_to_term(VBin, [safe])};
@@ -153,10 +145,7 @@ get(Index, Key, Default) ->
 
 
 del(Index, Key) ->
-    KBin0 = term_to_binary(Key, [{minor_version, 1}]),
-    KBin = <<"user:", KBin0/binary>>,
-    KLen = size(KBin),
-    Payload = <<KLen:32/integer, KBin/binary>>,
+    Payload = to_payload([ukey(Key)]),
     case cmd(Index, ?EASTON_COMMAND_DEL_USER_KV, Payload) of
         {ok, <<>>} ->
             true;
@@ -335,3 +324,29 @@ kill_cmd(OsPid) ->
     lists:flatten(io_lib:format(Fmt, [OsPid])).
 
 
+ukey(Term) ->
+    Bin = t2b(Term),
+    Len = size(Bin),
+    <<Len:32/big-unsigned-integer, Bin/binary>>.
+
+
+to_payload(Parts) ->
+    to_payload(Parts, []).
+
+
+to_payload([], Acc) ->
+    iolist_to_binary(lists:reverse(Acc));
+to_payload([Part | Rest], Acc) ->
+    Bin = part_to_payload(Part),
+    to_payload(Rest, [Bin | Acc]).
+
+
+part_to_payload(Bin) when is_binary(Bin) ->
+    Size = size(Bin),
+    <<Size:32/big-unsigned-integer, Bin/binary>>;
+part_to_payload(Int) when is_integer(Int), Int >= 0 ->
+    <<Int:32/big-unsigned-integer>>.
+
+
+t2b(T) ->
+    term_to_binary(T, [{minor_version, 1}]).
