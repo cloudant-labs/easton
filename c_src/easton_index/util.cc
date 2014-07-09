@@ -3,7 +3,8 @@
 
 #include <tcutil.h>
 
-#include "util.h"
+#include "cowboys.hh"
+#include "util.hh"
 
 
 bool
@@ -38,6 +39,62 @@ easton_read_uint16(const uint8_t** cmd, uint32_t* cmdlen, uint16_t* ret)
     return true;
 }
 
+
+bool
+easton_read_uint32(const uint8_t** cmd, uint32_t* cmdlen, uint32_t* ret)
+{
+    uint32_t val;
+
+    if(*cmdlen < sizeof(val)) {
+        return false;
+    }
+
+    memcpy(&val, *cmd, sizeof(val));
+    val = ntohl(val);
+
+    *cmd += sizeof(val);
+    *cmdlen -= sizeof(val);
+    *ret = val;
+
+    return true;
+}
+
+
+bool
+easton_read_uint64(const uint8_t** cmd, uint32_t* cmdlen, uint64_t* ret)
+{
+    uint64_t val;
+
+    if(*cmdlen < sizeof(val)) {
+        return false;
+    }
+
+    memcpy(&val, *cmd, sizeof(val));
+    val = be64toh(val);
+
+    *cmd += sizeof(val);
+    *cmdlen -= sizeof(val);
+    *ret = val;
+
+    return true;
+}
+
+
+bool
+easton_read_double(const uint8_t** cmd, uint32_t* cmdlen, double* ret)
+{
+    uint64_t tmp;
+
+    if(!easton_read_uint64(cmd, cmdlen, &tmp)) {
+        return false;
+    }
+
+    memcpy(ret, &tmp, sizeof(double));
+
+    return true;
+}
+
+
 bool
 easton_read_binary(const uint8_t** cmd, uint32_t* cmdlen,
     const void** buf, uint32_t* buflen)
@@ -62,4 +119,30 @@ easton_read_binary(const uint8_t** cmd, uint32_t* cmdlen,
     *cmdlen -= *buflen + sizeof(uint32_t);
 
     return true;
+}
+
+
+void
+easton_write_uint32(uint8_t* buf, uint32_t val)
+{
+    val = htobe32(val);
+    memcpy(buf, &val, sizeof(val));
+}
+
+
+void
+easton_write_uint64(uint8_t* buf, uint64_t val)
+{
+    val = htobe64(val);
+    memcpy(buf, &val, sizeof(val));
+}
+
+
+void
+easton_write_double(uint8_t* buf, double val)
+{
+    uint64_t tmp;
+
+    memcpy(&tmp, &val, sizeof(double)); // Assumes double is 64 bits
+    easton_write_uint64(buf, tmp);
 }

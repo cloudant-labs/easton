@@ -5,6 +5,7 @@
 #include <unistd.h>
 
 #include "config.hh"
+#include "geom.hh"
 #include "index.hh"
 #include "util.hh"
 
@@ -48,25 +49,50 @@ get_file_name(const int8_t* base_dir, const int8_t* name)
 }
 
 
+static
+uint8_t*
+get_docid_key(const uint8_t* docid, uint32_t docidlen, uint32_t* dockeylen)
+{
+    TCXSTR* tmp;
+    uint8_t* ret;
+
+    tmp = tcxstrnew2("docid:");
+    tcxstrcat(tmp, docid, (int) docidlen);
+    *dockeylen = (uint32_t) tcxstrsize(tmp);
+    ret = (uint8_t*) tcmemdup(tcxstrptr(tmp), *dockeylen);
+
+    tcxstrdel(tmp);
+    return ret;
+}
+
+
 static void
 init_id_idx(easton_idx_t* idx)
 {
     int32_t flags = HDBOWRITER | HDBOCREAT;
-    int doc_id_num;
+    uint8_t* val;
+    const uint8_t* vcopy;
+    uint32_t len;
 
     idx->id_idx = tchdbnew();
     if(!tchdbopen(idx->id_idx, (char*) idx->id_idx_file, flags)) {
         exit(EASTON_ERROR_BAD_ID_IDX_INIT);
     }
 
-    doc_id_num = tchdbaddint(idx->id_idx,
-            DOC_ID_NUM_KEY, strlen(DOC_ID_NUM_KEY), 0);
+    val = (uint8_t*) tchdbget(idx->id_idx,
+            DOC_ID_NUM_KEY, strlen(DOC_ID_NUM_KEY), (int*) &len);
 
-    if(doc_id_num < 0) {
+    if(val == NULL) {
+        idx->doc_id_num = 0;
+        return;
+    }
+
+    vcopy = val;
+    if(!easton_read_uint64(&vcopy, &len, &(idx->doc_id_num))) {
         exit(EASTON_ERROR_BAD_ID_IDX_INIT);
     }
 
-    idx->doc_id_num = (uint64_t) doc_id_num;
+    free(val);
 }
 
 
@@ -163,6 +189,164 @@ init_geos(easton_idx_t* idx)
 {
     idx->geos_ctx = initGEOS_r(geos_notice, geos_error);
     GEOS_setWKBByteOrder_r(idx->geos_ctx, GEOS_WKB_XDR);
+}
+
+
+static uint64_t
+get_doc_num(easton_idx_t* idx, uint8_t* dockey, uint32_t dockeylen)
+{
+    uint8_t* val;
+    const uint8_t* vcopy;
+    uint32_t len;
+    uint64_t ret;
+
+    val = (uint8_t*) tchdbget(idx->id_idx, dockey, dockeylen, (int*) &len);
+    if(val == NULL) {
+        ret = idx->doc_id_num++;
+    } else {
+        vcopy = val;
+        if(!easton_read_uint64(&vcopy, &len, &ret)) {
+            exit(EASTON_ERROR_BAD_DOC_ID_VAL);
+        }
+        free(val);
+    }
+
+    // Write the update doc_id_num back to id_idx
+    val = (uint8_t*) malloc(sizeof(uint64_t));
+    if(val == NULL) {
+        exit(EASTON_ERROR_BAD_ALLOC);
+    }
+
+    easton_write_uint64(val, ret);
+
+    if(!tchdbput(idx->id_idx, DOC_ID_NUM_KEY, strlen(DOC_ID_NUM_KEY),
+            val, sizeof(uint64_t))) {
+        exit(EASTON_ERROR_BAD_DOC_NUM_INC);
+    }
+
+    free(val);
+
+    return ret;
+}
+
+
+static double***
+allocate_bounds(easton_idx_t* idx, uint32_t num)
+{
+    // This allocation strategy is a bit fancy to avoid
+    // the need to perform a possibly large number of
+    // allocations. The basic idea is to allocate the
+    // number of each value and then arrange our pointers
+    // after the fact.
+
+    double* values = NULL;
+    double** arrays = NULL;
+    double*** bounds = NULL;
+    uint32_t i;
+
+    values = (double*) malloc(num * 2 * idx->dimensions * sizeof(double));
+    if(values == NULL) {
+        goto error;
+    }
+    memset(values, 0, num * 2 * idx->dimensions * sizeof(double));
+
+    arrays = (double**) malloc(num * 2 * sizeof(double**));
+    if(arrays == NULL) {
+        goto error;
+    }
+
+    bounds = (double***) malloc(num * sizeof(double***));
+    if(bounds == NULL) {
+        goto error;
+    }
+
+    // Attach the arrays to our values
+    for(i = 0; i < (num*2); i++) {
+        arrays[i] = values + (i * idx->dimensions);
+    }
+
+    // Attach arrays into the bounds
+    for(i = 0; i < num; i++) {
+        bounds[i] = arrays + (i * 2);
+    }
+
+    return bounds;
+
+error:
+    if(values != NULL) {
+        free(values);
+    }
+
+    if(arrays != NULL) {
+        free(arrays);
+    }
+
+    return NULL;
+}
+
+
+static void
+free_bounds(double*** bounds)
+{
+    // See allocate_bounds for the fancy.
+
+    free(bounds[0][0]);
+    free(bounds[0]);
+    free(bounds);
+}
+
+
+static uint8_t*
+make_id_idx_value(uint64_t docnum, uint64_t dims, uint32_t numwkbs,
+        double*** bounds, uint32_t* retlen)
+{
+    uint32_t total_size = 8 + 4 + (numwkbs * 2 * dims * sizeof(double));
+    uint8_t* val = (uint8_t*) malloc(total_size);
+    uint32_t offset;
+    uint32_t i;
+    uint32_t j;
+    uint32_t k;
+
+    if(val == NULL) {
+        return NULL;
+    }
+
+    easton_write_uint64(val, docnum);
+    easton_write_uint32(val + 8, numwkbs);
+
+    for(i = 0; i < numwkbs; i++) {
+        for(j = 0; j < 2; j++) {
+            for(k = 0; k < dims; k++) {
+                offset = 12 + i * j * k * sizeof(double);
+                easton_write_double(val + offset, bounds[i][j][k]);
+            }
+        }
+    }
+
+    *retlen = total_size;
+    return val;
+}
+
+
+static uint8_t*
+make_geo_idx_value(uint8_t* docid, uint32_t docidlen,
+        uint8_t* wkb, uint32_t wkblen, uint32_t* retlen)
+{
+    uint32_t total_size = 4 + 4 + docidlen + wkblen;
+    uint8_t* val = (uint8_t*) malloc(total_size);
+
+    if(val == NULL) {
+        return NULL;
+    }
+
+    easton_write_uint32(val, docidlen);
+    memcpy(val + 4, docid, docidlen);
+
+    easton_write_uint32(val + 4 + docidlen, wkblen);
+    memcpy(val + 4 + docidlen + 4, wkb, wkblen);
+
+    *retlen = total_size;
+    return val;
 }
 
 
@@ -305,4 +489,163 @@ bool
 easton_index_del_kv(easton_idx_t* idx, void* key, uint32_t klen)
 {
     return tchdbout(idx->id_idx, key, (int32_t) klen);
+}
+
+
+bool
+easton_index_update(easton_idx_t* idx,
+        uint8_t* docid, uint32_t docidlen,
+        uint32_t numwkbs, uint8_t** wkbs, uint32_t* wkblens)
+{
+    uint8_t* dockey = NULL;
+    uint32_t dockeylen;
+    uint64_t docnum;
+    double*** bounds = NULL;
+    uint8_t* val = NULL;
+    uint32_t vallen;
+    uint32_t i;
+    bool ret = false;
+
+    dockey = get_docid_key(docid, docidlen, &dockeylen);
+    if(dockey == NULL) {
+        goto done;
+    }
+
+    docnum = get_doc_num(idx, dockey, dockeylen);
+
+    bounds = allocate_bounds(idx, numwkbs);
+    if(bounds == NULL) {
+        goto done;
+    }
+
+    for(i = 0; i < numwkbs; i++) {
+        if(!easton_geom_get_bounds(idx, wkbs[i], wkblens[i], bounds[i])) {
+            goto done;
+        }
+    }
+
+    val = make_id_idx_value(docnum, idx->dimensions, numwkbs, bounds, &vallen);
+    if(!tchdbput(idx->id_idx, dockey, dockeylen, val, vallen)) {
+        goto done;
+    }
+    free(val);
+    val = NULL;
+
+    for(i = 0; i < numwkbs; i++) {
+        val = make_geo_idx_value(docid, docidlen, wkbs[i], wkblens[i], &vallen);
+        if(val == NULL) {
+            goto done;
+        }
+
+        if(Index_InsertData(idx->geo_idx, docnum, bounds[i][0], bounds[i][1],
+                idx->dimensions, val, vallen) != RT_None) {
+            goto done;
+        }
+
+        free(val);
+        val = NULL;
+    }
+
+    ret = true;
+
+done:
+    if(dockey != NULL) {
+        free(dockey);
+    }
+
+    if(bounds != NULL) {
+        free_bounds(bounds);
+    }
+
+    if(val != NULL) {
+        free(val);
+    }
+
+    return ret;
+}
+
+
+bool
+easton_index_delete(easton_idx_t* idx, uint8_t* docid, uint32_t docidlen)
+{
+    uint8_t* dockey = NULL;
+    uint32_t dockeylen;
+    uint8_t* val = NULL;
+    uint32_t vallen;
+    const uint8_t* vcopy;
+    uint64_t docnum;
+    uint32_t numwkbs;
+    double*** bounds = NULL;
+    uint32_t i;
+    uint32_t j;
+    uint32_t k;
+    bool ret = false;
+
+    dockey = get_docid_key(docid, docidlen, &dockeylen);
+    if(dockey == NULL) {
+        goto done;
+    }
+
+    val = (uint8_t*) tchdbget(idx->id_idx, dockey, dockeylen, (int*) &vallen);
+    if(val == NULL) {
+        // Should this be a no-op or a failure? Currently
+        // its a failure.
+        goto done;
+    }
+
+    // Read functions mutate the pointer so use a copy
+    vcopy = val;
+
+    if(!easton_read_uint64(&vcopy, &vallen, &docnum)) {
+        goto done;
+    }
+
+    if(!easton_read_uint32(&vcopy, &vallen, &numwkbs)) {
+        goto done;
+    }
+
+    bounds = allocate_bounds(idx, numwkbs);
+    if(bounds == NULL) {
+        goto done;
+    }
+
+    for(i = 0; i < numwkbs; i++) {
+        for(j = 0; j < 2; j++) {
+            for(k = 0; k < idx->dimensions; k++) {
+                if(!easton_read_double(&vcopy, &vallen, &(bounds[i][j][k]))) {
+                    goto done;
+                }
+            }
+        }
+    }
+
+    for(i = 0; i < numwkbs; i++) {
+        if(Index_DeleteData(idx->geo_idx, docnum, bounds[i][0], bounds[i][1],
+                idx->dimensions) != RT_None) {
+            goto done;
+        }
+    }
+
+    if(!tchdbout(idx->id_idx, dockey, dockeylen)) {
+        goto done;
+    }
+
+    ret = true;
+
+done:
+    if(dockey != NULL) {
+        free(dockey);
+    }
+
+    if(val != NULL) {
+        free(val);
+    }
+
+    // Don't free vcopy since its a copy of val
+
+    if(bounds != NULL) {
+        free_bounds(bounds);
+    }
+
+    return ret;
 }

@@ -39,6 +39,11 @@ uint8_t* easton_index_get_kv(easton_idx_t* idx,
         void* key, uint32_t klen, uint32_t* vlen);
 bool easton_index_del_kv(easton_idx_t* idx, void* key, uint32_t klen);
 
+bool easton_index_update(easton_idx_t* idx,
+        uint8_t* docid, uint32_t docidlen,
+        uint32_t numwkbs, uint8_t** wkbs, uint32_t* wkblens);
 
+bool easton_index_delete(easton_idx_t* idx,
+        uint8_t* docid, uint32_t docidlen);
 
 #endif

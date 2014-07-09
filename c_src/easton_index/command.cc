@@ -148,6 +148,89 @@ del_user_kv(easton_idx_t* idx, const uint8_t* cmd, uint32_t cmdlen)
 }
 
 
+static void
+update_rtree(easton_idx_t* idx, const uint8_t* cmd, uint32_t cmdlen)
+{
+    uint8_t* docid;
+    uint32_t docidlen;
+    uint32_t numwkbs;
+    uint8_t** wkbs = NULL;
+    uint32_t* wkblens = NULL;
+    uint8_t* wkb = NULL;
+    uint32_t wkblen;
+    uint32_t i;
+    int code = EASTON_OK;
+
+    if(!easton_read_binary(&cmd, &cmdlen, (const void**) &docid, &docidlen)) {
+        code = EASTON_ERROR_BAD_DOC_ID;
+        goto done;
+    }
+
+    if(!easton_read_uint32(&cmd, &cmdlen, &numwkbs)) {
+        code = EASTON_ERROR_BAD_NUM_WKBS;
+        goto done;
+    }
+
+    wkbs = (uint8_t**) malloc(numwkbs * sizeof(uint8_t*));
+    if(wkbs == NULL) {
+        code = EASTON_ERROR_BAD_ALLOC;
+        goto done;
+    }
+
+    wkblens = (uint32_t*) malloc(numwkbs * sizeof(uint32_t));
+    if(wkblens == NULL) {
+        code = EASTON_ERROR_BAD_ALLOC;
+        goto done;
+    }
+
+    for(i = 0; i < numwkbs; i++) {
+        if(!easton_read_binary(&cmd, &cmdlen, (const void**) wkb, &wkblen)) {
+            code = EASTON_ERROR_BAD_WKB;
+            goto done;
+        }
+        wkbs[i] = wkb;
+        wkblens[i] = wkblen;
+    }
+
+    if(easton_index_update(idx, docid, docidlen, numwkbs, wkbs, wkblens)) {
+        easton_send_ok(NULL, 0);
+    } else {
+        easton_send_error(NULL, 0);
+    }
+
+done:
+    if(wkbs != NULL) {
+        free(wkbs);
+    }
+
+    if(wkblens != NULL) {
+        free(wkblens);
+    }
+
+    if(code != EASTON_OK) {
+        exit(code);
+    }
+}
+
+
+static void
+delete_rtree(easton_idx_t* idx, const uint8_t* cmd, uint32_t cmdlen)
+{
+    uint8_t* docid;
+    uint32_t docidlen;
+
+    if(!easton_read_binary(&cmd, &cmdlen, (const void**) &docid, &docidlen)) {
+        exit(EASTON_ERROR_BAD_DOC_ID);
+    }
+
+    if(easton_index_delete(idx, docid, docidlen)) {
+        easton_send_ok(NULL, 0);
+    } else {
+        easton_send_error(NULL, 0);
+    }
+}
+
+
 void
 easton_handle_command(easton_idx_t* idx, const uint8_t* cmd, uint32_t cmdlen)
 {
@@ -178,6 +261,12 @@ easton_handle_command(easton_idx_t* idx, const uint8_t* cmd, uint32_t cmdlen)
             break;
         case EASTON_COMMAND_DEL_USER_KV:
             del_user_kv(idx, cmd, cmdlen);
+            break;
+        case EASTON_COMMAND_UPDATE_ENTRIES:
+            update_rtree(idx, cmd, cmdlen);
+            break;
+        case EASTON_COMMAND_DELETE_ENTRIES:
+            delete_rtree(idx, cmd, cmdlen);
             break;
         default:
             exit(EASTON_ERROR_BAD_COMMAND);

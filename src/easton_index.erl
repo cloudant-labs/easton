@@ -13,11 +13,11 @@
     del/2,
 
     doc_id_num/1,
-    doc_count/1
+    doc_count/1,
 
-    % insert/3,
-    % delete/2,
-    %
+    update/3,
+    delete/2
+
     % search/3,
     % search/4
 ]).
@@ -153,6 +153,27 @@ del(Index, Key) ->
             false;
         Else ->
             throw({bad_del, Else})
+    end.
+
+
+update(Index, DocId, Geometries) ->
+    WKBs = [easton_geojson:to_wkb(G) || G <- Geometries],
+    Payload = to_payload([DocId, length(WKBs)] ++ WKBs),
+    case cmd(Index, ?EASTON_COMMAND_UPDATE_ENTRIES, Payload) of
+        {ok, <<>>} ->
+            ok;
+        Else ->
+            throw({bad_update, Else})
+    end.
+
+
+delete(Index, DocId) ->
+    Payload = to_payload([DocId]),
+    case cmd(Index, ?EASTON_COMMAND_DELETE_ENTRIES, Payload) of
+        {ok, <<>>} ->
+            ok;
+        Else ->
+            throw({bad_delete, Else})
     end.
 
 
