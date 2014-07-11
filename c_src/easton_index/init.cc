@@ -1,5 +1,6 @@
 
 
+#include <unistd.h>
 #include <arpa/inet.h>
 
 #include <CsMap/cs_map.h>
@@ -9,11 +10,21 @@
 #include "io.hh"
 
 
+using namespace easton;
+
+
+NS_EASTON_BEGIN
+
+
 static void
 report_pid()
 {
     uint32_t p = htonl((uint32_t) getpid());
-    easton_send_data((uint8_t*) &p, sizeof(p));
+    io::Writer::Ptr writer = io::Writer::create();
+    writer->start_tuple(2);
+    writer->write("ok");
+    writer->write((uint64_t) p);
+    writer->send();
 }
 
 
@@ -33,8 +44,11 @@ init_csmap()
 
 
 void
-easton_init()
+init()
 {
     report_pid();
     init_csmap();
 }
+
+
+NS_EASTON_END

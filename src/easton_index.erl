@@ -5,7 +5,7 @@
     open/1,
     open/2,
     close/1,
-    flush/1,
+    sync/1,
 
     put/3,
     get/2,
@@ -16,7 +16,7 @@
     doc_count/1,
 
     update/3,
-    delete/2
+    remove/2
 
     % search/3,
     % search/4
@@ -72,7 +72,7 @@ open(Directory, Opts) ->
 close(Index) ->
     Ref = erlang:monitor(process, Index),
     case gen_server:call(Index, close) of
-        {ok, <<>>} ->
+        {ok, true} ->
             receive
                 {'DOWN', Ref, process, Index, _} ->
                     ok
@@ -82,56 +82,54 @@ close(Index) ->
             end;
         Else ->
             erlang:demonitor(Ref, [flush]),
-            throw({bad_close, Else})
+            throw(Else)
     end.
 
 
-flush(Index) ->
-    case cmd(Index, ?EASTON_COMMAND_FLUSH, <<>>) of
-        {ok, <<>>} ->
+sync(Index) ->
+    case cmd(Index, ?EASTON_COMMAND_SYNC, true) of
+        {ok, true} ->
             ok;
         Else ->
-            throw({bad_flush, Else})
+            throw(Else)
     end.
 
 
 doc_id_num(Index) ->
-    case cmd(Index, ?EASTON_COMMAND_GET_DOC_ID_NUM, <<>>) of
-        {ok, <<DocIdNum:64/integer>>} ->
+    case cmd(Index, ?EASTON_COMMAND_GET_DOC_ID_NUM, true) of
+        {ok, DocIdNum} ->
             {ok, DocIdNum};
         Else ->
-            throw({bad_doc_id_num, Else})
+            throw(Else)
     end.
 
 
 doc_count(Index) ->
-    case cmd(Index, ?EASTON_COMMAND_GET_DOC_COUNT, <<>>) of
-        {ok, <<DocCount:64/integer>>} ->
+    case cmd(Index, ?EASTON_COMMAND_GET_DOC_COUNT, true) of
+        {ok, DocCount} ->
             {ok, DocCount};
         Else ->
-            throw({bad_doc_count, Else})
+            throw(Else)
     end.
 
 
 put(Index, Key, Value) ->
-    Payload = to_payload([ukey(Key), t2b(Value)]),
-    case cmd(Index, ?EASTON_COMMAND_PUT_USER_KV, Payload) of
-        {ok, <<>>} ->
+    case cmd(Index, ?EASTON_COMMAND_PUT_USER_KV, {ukey(Key), t2b(Value)}) of
+        ok ->
             ok;
         Else ->
-            throw({bad_put, Else})
+            throw(Else)
     end.
 
 
 get(Index, Key) ->
-    Payload = to_payload([ukey(Key)]),
-    case cmd(Index, ?EASTON_COMMAND_GET_USER_KV, Payload) of
+    case cmd(Index, ?EASTON_COMMAND_GET_USER_KV, ukey(Key)) of
         {ok, VBin} ->
             {Key, binary_to_term(VBin, [safe])};
-        {error, <<>>} ->
+        false ->
             false;
         Else ->
-            throw({bad_get, Else})
+            throw(Else)
     end.
 
 
@@ -145,35 +143,32 @@ get(Index, Key, Default) ->
 
 
 del(Index, Key) ->
-    Payload = to_payload([ukey(Key)]),
-    case cmd(Index, ?EASTON_COMMAND_DEL_USER_KV, Payload) of
-        {ok, <<>>} ->
+    case cmd(Index, ?EASTON_COMMAND_DEL_USER_KV, ukey(Key)) of
+        true ->
             true;
-        {error, <<>>} ->
+        false ->
             false;
         Else ->
-            throw({bad_del, Else})
+            throw(Else)
     end.
 
 
 update(Index, DocId, Geometries) ->
     WKBs = [easton_geojson:to_wkb(G) || G <- Geometries],
-    Payload = to_payload([DocId, length(WKBs)] ++ WKBs),
-    case cmd(Index, ?EASTON_COMMAND_UPDATE_ENTRIES, Payload) of
-        {ok, <<>>} ->
+    case cmd(Index, ?EASTON_COMMAND_UPDATE_ENTRIES, {DocId, WKBs}) of
+        ok ->
             ok;
         Else ->
-            throw({bad_update, Else})
+            throw(Else)
     end.
 
 
-delete(Index, DocId) ->
-    Payload = to_payload([DocId]),
-    case cmd(Index, ?EASTON_COMMAND_DELETE_ENTRIES, Payload) of
-        {ok, <<>>} ->
+remove(Index, DocId) ->
+    case cmd(Index, ?EASTON_COMMAND_REMOVE_ENTRIES, DocId) of
+        ok ->
             ok;
         Else ->
-            throw({bad_delete, Else})
+            throw(Else)
     end.
 
 
@@ -195,21 +190,19 @@ handle_call(close, _From, #st{closing = true} = St) ->
     {reply, ok, St};
 
 handle_call(close, From, #st{closing = false} = St) ->
-    Packet = <<?EASTON_COMMAND_CLOSE:16/integer>>,
-    handle_call({packet, Packet}, From, St#st{closing = true});
+    Cmd = {cmd, t2b({?EASTON_COMMAND_CLOSE, true})},
+    handle_call(Cmd, From, St#st{closing = true});
 
-handle_call({packet, P}, _From, #st{port = Port} = St) ->
+handle_call({cmd, C}, _From, #st{port = Port} = St) ->
     %io:format(standard_error, "~nPacket: ~p: ~p~n", [size(P), P]),
-    true = erlang:port_command(St#st.port, P),
+    true = erlang:port_command(St#st.port, C),
     receive
-        {Port, {data, <<0:8/integer, Bin/binary>>}} ->
-            {reply, {ok, Bin}, St};
-        {Port, {data, <<1:8/integer, Bin/binary>>}} ->
-            {reply, {error, Bin}, St};
+        {Port, {data, Resp}} ->
+            {reply, binary_to_term(Resp, [safe]), St};
         Else ->
             throw({error, Else})
     after 5000 ->
-            exit({timeout, P})
+            exit({timeout, C})
     end;
 
 handle_call(Msg, _From, St) ->
@@ -234,9 +227,8 @@ code_change(_Vsn, St, _Extra) ->
     {ok, St}.
 
 
-cmd(Index, OpCode, Payload) ->
-    Packet = <<OpCode:16/integer, Payload/binary>>,
-    gen_server:call(Index, {packet, Packet}, infinity).
+cmd(Index, OpCode, Args) ->
+    gen_server:call(Index, {cmd, t2b({OpCode, Args})}, infinity).
 
 
 kill_monitor(Pid, OsPid) ->
@@ -267,10 +259,15 @@ open_index(Opts) ->
     PortOpts = ?PORT_OPTS ++ Opts,
     Port = erlang:open_port({spawn_executable, exe_name()}, PortOpts),
     receive
-        {Port, {data, <<OsPid:32/big-unsigned-integer>>}} ->
-            {ok, Port, OsPid};
+        {Port, {data, Bin}} ->
+            case binary_to_term(Bin, [safe]) of
+                {ok, OsPid} ->
+                    {ok, Port, OsPid};
+                Else ->
+                    throw(Else)
+            end;
         Else ->
-            throw({bad_os_pid, Else})
+            throw(Else)
     after 1000 ->
         throw({timeout, index_open})
     end.
@@ -349,24 +346,6 @@ ukey(Term) ->
     Bin = t2b(Term),
     Len = size(Bin),
     <<Len:32/big-unsigned-integer, Bin/binary>>.
-
-
-to_payload(Parts) ->
-    to_payload(Parts, []).
-
-
-to_payload([], Acc) ->
-    iolist_to_binary(lists:reverse(Acc));
-to_payload([Part | Rest], Acc) ->
-    Bin = part_to_payload(Part),
-    to_payload(Rest, [Bin | Acc]).
-
-
-part_to_payload(Bin) when is_binary(Bin) ->
-    Size = size(Bin),
-    <<Size:32/big-unsigned-integer, Bin/binary>>;
-part_to_payload(Int) when is_integer(Int), Int >= 0 ->
-    <<Int:32/big-unsigned-integer>>.
 
 
 t2b(T) ->

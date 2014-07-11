@@ -3,56 +3,79 @@
 #define EASTON_INDEX_HH
 
 
-// Prevent the misuse of non thread-safe GEOS functions
-#define GEOS_USE_ONLY_R_API
-
-
 #include <tchdb.h>
 #include <spatialindex/capi/sidx_api.h>
-#include <geos_c.h>
+
+#include "easton.hh"
+#include "geo.hh"
+#include "io.hh"
 
 
-typedef struct {
-    int8_t*                 base_dir;
-    int8_t*                 id_idx_file;
-    int8_t*                 geo_idx_file;
-
-    TCHDB*                  id_idx;
-    IndexH                  geo_idx;
-    GEOSContextHandle_t     geos_ctx;
-
-    uint64_t                 dimensions;
-    uint64_t                 doc_id_num;
-} easton_idx_t;
+using namespace easton;
 
 
-easton_idx_t* easton_index_init(int32_t argc, const int8_t* argv[]);
-bool easton_index_close(easton_idx_t* idx);
-bool easton_index_flush(easton_idx_t* idx);
+NS_EASTON_BEGIN
 
-uint64_t easton_index_get_doc_id_num(easton_idx_t* idx);
-uint64_t easton_index_get_doc_count(easton_idx_t* idx);
 
-bool easton_index_put_kv(easton_idx_t* idx,
-        void* key, uint32_t klen, void* val, uint32_t vlen);
-uint8_t* easton_index_get_kv(easton_idx_t* idx,
-        void* key, uint32_t klen, uint32_t* vlen);
-bool easton_index_del_kv(easton_idx_t* idx, void* key, uint32_t klen);
+class Index
+{
+    public:
+        typedef std::shared_ptr<Index> Ptr;
+        typedef std::pair<io::Bytes::Ptr, io::Bytes::Ptr> Result;
 
-bool easton_index_update(easton_idx_t* idx,
-        uint8_t* docid, uint32_t docidlen,
-        uint32_t numwkbs, uint8_t** wkbs, uint32_t* wkblens);
+        static Ptr create(int argc, const char* argv[]);
+        ~Index();
 
-bool easton_index_delete(easton_idx_t* idx,
-        uint8_t* docid, uint32_t docidlen);
+        void sync();
 
-bool easton_index_query(easton_idx_t* idx,
-        GEOSGeometry* query,
-        easton_geom_filt_t* filt,
-        bool nearest,
-        uint64_t limit,
-        uint64_t offset,
-        std::vector<bytes>& docids
-        std::vector<bytes>& wkbs);
+        uint64_t curr_docid_num();
+        uint64_t doc_count();
+
+        void put_kv(io::Bytes::Ptr key, io::Bytes::Ptr val);
+        io::Bytes::Ptr get_kv(io::Bytes::Ptr key);
+        bool del_kv(io::Bytes::Ptr key);
+
+        void update(io::Bytes::Ptr docid, io::Bytes::Vector wkbs);
+        void remove(io::Bytes::Ptr docid);
+
+        std::vector<Result> query(geo::Bounds::Ptr bounds, bool nearest);
+
+    private:
+        Index();
+        Index(int argc, const char* argv[]);
+        Index(const Index& other);
+
+        void init_id_idx();
+        void init_geo_idx(int argc, const char* argv[]);
+
+        io::Bytes::Ptr make_dockey(io::Bytes::Ptr docid);
+
+        uint64_t get_doc_num(io::Bytes::Ptr docid);
+
+        io::Bytes::Ptr make_id_value(
+                uint64_t docnum, geo::Bounds::Vector bounds);
+        uint64_t read_id_value(
+                io::Bytes::Ptr data, geo::Bounds::Vector& bounds);
+
+        io::Bytes::Ptr make_geo_value(
+                io::Bytes::Ptr docid, io::Bytes::Ptr wkb);
+        void read_geo_value(IndexItemH item,
+                io::Bytes::Ptr& docid, io::Bytes::Ptr& wkb);
+
+        std::string base_dir;
+        std::string id_file;
+        std::string geo_file;
+
+        TCHDB* id_idx;
+        IndexH geo_idx;
+        geo::Util::Ptr geo_util;
+
+        uint64_t dimensions;
+        uint64_t doc_id_num;
+};
+
+
+NS_EASTON_END
+
 
 #endif

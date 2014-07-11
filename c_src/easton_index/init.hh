@@ -3,7 +3,16 @@
 #define EASTON_INIT_HH
 
 
-void easton_init();
+#include "easton.hh"
+
+
+NS_EASTON_BEGIN
+
+
+void init();
+
+
+NS_EASTON_END
 
 
 #endif

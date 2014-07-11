@@ -1,60 +1,110 @@
 
-
 #include <geos_c.h>
 #include <spatialindex/capi/sidx_api.h>
 
-#include "geom.hh"
-#include "util.hh"
+#include "config.hh"
+#include "exceptions.hh"
+#include "geo.hh"
 
 
-GEOSGeometry*
-easton_geom_from_wkb(easton_idx_t* idx, uint8_t* wkb, uint32_t wkb)
-{
-    GEOSWKBReader* reader;
-    GEOSGeometry* geom;
-    
-    reader = GEOSWKBReader_create_r(idx->geos_ctx);
-    if(reader == NULL) {
-        return NULL;
-    }
-    
-    geom = GEOSWKBReader_read_r(idx->geos_ctx, reader, wkb, wkblen);
+NS_EASTON_BEGIN
+NS_EASTON_GEO_BEGIN
 
-    GEOSWKBReader_destroy_r(idx->geos_ctx, reader);
-    
-    return geom;
+using namespace easton;
+
+
+static void
+geos_notice(const char* fmt, ...) {
+    return;
 }
 
 
-GEOSGeometry*
-easton_geom_from_item(easton_idx_t* idx, ItemH* item)
-{
-    uint8_t* data;
-    uint32_t len;
-    uint8_t* wkb;
-    uint32_t wkblen;
-
-    if(IndexItem_GetData(item, (uint8_t **) &data, &len) != RT_None) {
-        return NULL;
-    }
-    
-    // Read and discard docid
-    if(!easton_read_binary(&data, &len, &wkb, &wkblen)) {
-        return NULL;
-    }
-    
-    // Read the WKB
-    if(!easton_read_binary(&data, &len, &wkb, &wkblen)) {
-        return NULL;
-    }
-    
-    return easton_geom_from_wkb(idx, wkb, wkblen);
+static void
+geos_error(const char* fmt, ...) {
+    throw EastonExit(EASTON_ERROR_GEOS_EXCEPTION);
 }
 
 
-bool
-easton_geom_get_bounds(easton_idx_t* idx,
-        uint8_t* wkb, uint32_t wkblen, double** bounds)
+Bounds::Ptr
+Bounds::create(uint32_t dims)
+{
+    return Bounds::Ptr(new Bounds(dims));
+}
+
+
+Bounds::Bounds(uint32_t dims)
+{
+    this->dims = dims;
+
+    // Single array, mins in the first half,
+    // maxs in the second.
+
+    this->data = new double[2 * this->dims];
+}
+
+
+Bounds::~Bounds()
+{
+    delete [] this->data;
+}
+
+
+void
+Bounds::set_min(uint32_t dim, double val)
+{
+    if(val < this->data[dim]) {
+        this->data[dim] = val;
+    }
+}
+
+
+void
+Bounds::set_max(uint32_t dim, double val)
+{
+    if(val > this->data[this->dims + dim]) {
+        this->data[this->dims + dim] = val;
+    }
+}
+
+
+double*
+Bounds::mins()
+{
+    return this->data;
+}
+
+
+double*
+Bounds::maxs()
+{
+    return this->data + this->dims;
+}
+
+
+Util::Ptr
+Util::create()
+{
+    return Util::Ptr(new Util());
+}
+
+
+Util::Util()
+{
+    this->ctx = initGEOS_r(geos_notice, geos_error);
+    if(this->ctx == NULL) {
+        throw std::bad_alloc();
+    }
+}
+
+
+Util::~Util()
+{
+    finishGEOS_r(this->ctx);
+}
+
+
+Bounds::Ptr
+Util::get_bounds(io::Bytes::Ptr wkb, uint32_t dimensions)
 {
     GEOSGeometry* geom = NULL;
 	GEOSGeometry* env = NULL;
@@ -63,34 +113,28 @@ easton_geom_get_bounds(easton_idx_t* idx,
     int type;
     uint32_t ncoords;
     uint32_t dims;
-    uint32_t i;
-    uint32_t j;
     double v;
-    bool ret = false;
+    Bounds::Ptr ret;
 
-    geom = easton_geom_from_wkb(idx, wkb, wkblen);
+    geom = this->from_wkb(wkb);
     if(geom == NULL) {
         goto done;
     }
 
-    if(GEOSisValid_r(idx->geos_ctx, geom) != 1) {
+    if(GEOSisValid_r(this->ctx, geom) != 1) {
         goto done;
     }
 
-    if(GEOSisValid_r(idx->geos_ctx, geom) != 0) {
-        goto done;
-    }
-
-    env = GEOSEnvelope_r(idx->geos_ctx, geom);
+    env = GEOSEnvelope_r(this->ctx, geom);
     if(env == NULL) {
         goto done;
     }
 
-    type = GEOSGeomTypeId_r(idx->geos_ctx, env);
+    type = GEOSGeomTypeId_r(this->ctx, env);
 
     switch(type) {
         case GEOS_POINT:
-            coords = GEOSGeom_getCoordSeq_r(idx->geos_ctx, env);
+            coords = GEOSGeom_getCoordSeq_r(this->ctx, env);
             ncoords = 1;
             break;
         case GEOS_POLYGON:
@@ -100,8 +144,8 @@ easton_geom_get_bounds(easton_idx_t* idx,
             // bit simple but Polygons could technically have
             // holes even though we should have a rectangle
             // here.
-            ring = GEOSGetExteriorRing_r(idx->geos_ctx, env);
-            coords = GEOSGeom_getCoordSeq_r(idx->geos_ctx, ring);
+            ring = GEOSGetExteriorRing_r(this->ctx, env);
+            coords = GEOSGeom_getCoordSeq_r(this->ctx, ring);
             ncoords = (uint32_t) GEOSGetNumCoordinates(ring);
             break;
         default:
@@ -114,62 +158,83 @@ easton_geom_get_bounds(easton_idx_t* idx,
     }
 
     // Do some sanity checking on our dimensionality
-    if(!GEOSCoordSeq_getDimensions_r(idx->geos_ctx, coords, &dims)) {
+    if(!GEOSCoordSeq_getDimensions_r(this->ctx, coords, &dims)) {
         goto done;
     }
 
-    if(dims != idx->dimensions) {
+    if(dims != dimensions) {
         goto done;
     }
+
+    ret = Bounds::create(dims);
 
     // Initialize our bounds based on the first
     // point in the sequence. This allows us to avoid
     // having to use sentinel values.
-    for(j = 0; j < dims; j++) {
-        if(!GEOSCoordSeq_getOrdinate_r(idx->geos_ctx, coords, 0, j, &v)) {
+    for(uint32_t j = 0; j < dims; j++) {
+        if(!GEOSCoordSeq_getOrdinate_r(this->ctx, coords, 0, j, &v)) {
+            ret.reset();
             goto done;
         }
-        bounds[0][j] = v;
-        bounds[1][j] = v;
+
+        ret->set_min(j, v);
+        ret->set_max(j, v);
     }
 
     // Notice that we skip comparisons on the first
     // coordinate here.
-    for(i = 1; i < ncoords; i++) {
-        for(j = 0; j < dims; j++) {
-            if(!GEOSCoordSeq_getOrdinate_r(idx->geos_ctx, coords, i, j, &v)) {
+    for(uint32_t i = 1; i < ncoords; i++) {
+        for(uint32_t j = 0; j < dims; j++) {
+            if(!GEOSCoordSeq_getOrdinate_r(this->ctx, coords, i, j, &v)) {
+                ret.reset();
                 goto done;
             }
 
-            if(v < bounds[0][j]) {
-                bounds[0][j] = v;
-            }
-
-            if(v > bounds[1][j]) {
-                bounds[1][j] = v;
-            }
+            ret->set_min(j, v);
+            ret->set_max(j, v);
         }
     }
 
-    ret = true;
-
 done:
     if(geom != NULL) {
-        GEOSGeom_destroy_r(idx->geos_ctx, geom);
+        GEOSGeom_destroy_r(this->ctx, geom);
     }
 
     if(env != NULL) {
-        GEOSGeom_destroy_r(idx->geos_ctx, env);
+        GEOSGeom_destroy_r(this->ctx, env);
     }
 
     // From my understanding ring and coords
     // are just borrowed references so we must
     // not free them.
 
+    if(!ret) {
+        throw EastonException("Unable to get bounds for shape.");
+    }
+
     return ret;
 }
 
 
+GEOSGeometry*
+Util::from_wkb(io::Bytes::Ptr wkb)
+{
+    GEOSWKBReader* reader;
+    GEOSGeometry* geom;
+
+    reader = GEOSWKBReader_create_r(this->ctx);
+    if(reader == NULL) {
+        return NULL;
+    }
+
+    geom = GEOSWKBReader_read_r(this->ctx, reader, wkb->get(), wkb->size());
+
+    GEOSWKBReader_destroy_r(this->ctx, reader);
+
+    return geom;
+}
+
+/*
 char
 null_filter(GEOSContextHandle_t ctx,
         const GEOSPreparedGeometry* pg, const GEOSGeometry* g)
@@ -210,3 +275,7 @@ easton_gem_get_filter(uint8_t filter)
             return NULL;
     }
 }
+*/
+
+NS_EASTON_GEO_END
+NS_EASTON_END
