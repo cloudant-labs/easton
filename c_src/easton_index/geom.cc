@@ -1,7 +1,56 @@
 
+
 #include <geos_c.h>
+#include <spatialindex/capi/sidx_api.h>
 
 #include "geom.hh"
+#include "util.hh"
+
+
+GEOSGeometry*
+easton_geom_from_wkb(easton_idx_t* idx, uint8_t* wkb, uint32_t wkb)
+{
+    GEOSWKBReader* reader;
+    GEOSGeometry* geom;
+    
+    reader = GEOSWKBReader_create_r(idx->geos_ctx);
+    if(reader == NULL) {
+        return NULL;
+    }
+    
+    geom = GEOSWKBReader_read_r(idx->geos_ctx, reader, wkb, wkblen);
+
+    GEOSWKBReader_destroy_r(idx->geos_ctx, reader);
+    
+    return geom;
+}
+
+
+GEOSGeometry*
+easton_geom_from_item(easton_idx_t* idx, ItemH* item)
+{
+    uint8_t* data;
+    uint32_t len;
+    uint8_t* wkb;
+    uint32_t wkblen;
+
+    if(IndexItem_GetData(item, (uint8_t **) &data, &len) != RT_None) {
+        return NULL;
+    }
+    
+    // Read and discard docid
+    if(!easton_read_binary(&data, &len, &wkb, &wkblen)) {
+        return NULL;
+    }
+    
+    // Read the WKB
+    if(!easton_read_binary(&data, &len, &wkb, &wkblen)) {
+        return NULL;
+    }
+    
+    return easton_geom_from_wkb(idx, wkb, wkblen);
+}
+
 
 bool
 easton_geom_get_bounds(easton_idx_t* idx,
@@ -19,7 +68,7 @@ easton_geom_get_bounds(easton_idx_t* idx,
     double v;
     bool ret = false;
 
-    geom = GEOSGeomFromWKB_buf_r(idx->geos_ctx, wkb, wkblen);
+    geom = easton_geom_from_wkb(idx, wkb, wkblen);
     if(geom == NULL) {
         goto done;
     }
@@ -118,4 +167,46 @@ done:
     // not free them.
 
     return ret;
+}
+
+
+char
+null_filter(GEOSContextHandle_t ctx,
+        const GEOSPreparedGeometry* pg, const GEOSGeometry* g)
+{
+    return 1;
+}
+
+
+easton_geom_filter_t*
+easton_gem_get_filter(uint8_t filter)
+{
+    easton_geom_filter_t* f = NULL;
+
+    switch(filter) {
+        case EASTON_FILTER_NONE:
+            return &null_filter;
+        case EASTON_FILTER_CONTAINS:
+            return &GEOSPreparedContains_r;
+        case EASTON_FILTER_CONTAINS_PROPERLY:
+            return &GEOSPreparedContainsProperly_r;
+        case EASTON_FILTER_COVERED_BY:
+            return &GEOSPreparedCoveredBy_r;
+        case EASTON_FILTER_COVERS:
+            return &GEOSPreparedCovers_r;
+        case EASTON_FILTER_CROSSES:
+            return &GEOSPreparedCrosses_r;
+        case EASTON_FILTER_DISJOINT:
+            return &GEOSPreparedDisjoint_r;
+        case EASTON_FILTER_INTERSECTS:
+            return &GEOSPreparedIntersects_r;
+        case EASTON_FILTER_OVERLAPS:
+            return &GEOSPreparedOverlaps_r;
+        case EASTON_FILTER_TOUCHES:
+            return &GEOSPreparedTouches_r;
+        case EASTON_FILTER_WITHIN:
+            return &GEOSPreparedWithin_r;
+        default:
+            return NULL;
+    }
 }

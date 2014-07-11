@@ -46,4 +46,13 @@ bool easton_index_update(easton_idx_t* idx,
 bool easton_index_delete(easton_idx_t* idx,
         uint8_t* docid, uint32_t docidlen);
 
+bool easton_index_query(easton_idx_t* idx,
+        GEOSGeometry* query,
+        easton_geom_filt_t* filt,
+        bool nearest,
+        uint64_t limit,
+        uint64_t offset,
+        std::vector<bytes>& docids
+        std::vector<bytes>& wkbs);
+
 #endif

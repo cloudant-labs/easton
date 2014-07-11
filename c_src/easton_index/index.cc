@@ -137,7 +137,14 @@ init_geo_idx(easton_idx_t* idx, int32_t argc, const int8_t* argv[])
         exit(EASTON_ERROR_BAD_GEO_IDX_INIT);
     }
 
-    if(IndexProperty_SetResultSetLimit(props, limit) != RT_None) {
+    // Setting the limit and offset below to UINT64_MAX is so
+    // that we can do our own paging. Underneat the covers
+    // libspatialindex is loading all results into RAM and then
+    // has a post-processing step. Rather than futz around trying
+    // to page things propery we'll just disable its paging
+    // and use our own.
+
+    if(IndexProperty_SetResultSetLimit(props, UINT64_MAX) != RT_None) {
         exit(EASTON_ERROR_BAD_GEO_IDX_INIT);
     }
 
@@ -149,6 +156,8 @@ init_geo_idx(easton_idx_t* idx, int32_t argc, const int8_t* argv[])
     if(!Index_IsValid(idx->geo_idx)) {
         exit(EASTON_ERROR_CORRUPT_GEO_IDX);
     }
+    
+    Index_SetResultSetOffset(idx->geo_idx, UINT64_MAX);
 
     IndexProperty_Destroy(props);
 
@@ -347,6 +356,28 @@ make_geo_idx_value(uint8_t* docid, uint32_t docidlen,
 
     *retlen = total_size;
     return val;
+}
+
+
+bool
+item_to_docid_and_wkb(ItemH* item, bytes& docid, bytes& wkb)
+{
+    uint8_t* data;
+    uint32_t len;
+    
+    if(IndexItem_GetData(item, (uint8_t **) &data, &len) != RT_None) {
+        return false;
+    }
+    
+    if(!easton_read_binary(&data, &len, docid)) {
+        return false;
+    }
+    
+    if(!easton_read_binary(&data, &len, bytes)) {
+        return false;
+    }
+    
+    return true;
 }
 
 
@@ -647,5 +678,106 @@ done:
         free_bounds(bounds);
     }
 
+    return ret;
+}
+
+
+bool
+easton_index_intersects(easton_idx_t* idx,
+        GEOSGeometry* geom,
+        easton_geom_filt_t* filt,
+        bool nearest,
+        uint64_t limit,
+        uint64_t offset,
+        std::vector<bytes>& docids,
+        std::vector<bytes>& wkbs)
+{
+    GEOSPreparedGeometry* pg = NULL;
+    GEOSGeometry* item_geom = NULL;
+    double*** bounds = NULL;
+    IndexItemH* items = NULL;
+    uint64_t num_items;
+    bytes docid;
+    bytes wkb;
+    bool ret = false;
+    
+    docids.clear();
+    wkbs.clear();
+    
+    pg = GEOSPrepare_r(geom);
+    if(pg == NULL) {
+        goto done;
+    }
+    
+    bounds = allocate_bounds(idx, 1);
+    if(!easton_geom_get_bounds(idx, geom, bounds[0])) {
+        goto done;
+    }
+    
+    if(Index_Intersects_obj(idx->geo_idx, bounds[0][0], bounds[0][1],
+            idx->dimensions, &items, &num_items) != RT_None) {
+        goto done;
+    }
+    
+    // Filter out entries 
+    count = 0;
+    for(i = 0; i < num_items && count < offset; i++) {
+        if(!item_to_docid_and_wkb(items[i], docid, wkb)) {
+            goto done;
+        }
+        
+        item_geom = easton_geom_from_wkb(idx, &(wkb[0]), wkb.size());
+        if(item_geom == NULL) {
+            goto done;
+        }
+        
+        if((*filt)(idx->geos_ctx, pq, item_geom) == 1) {
+            count += 1;
+        }
+        
+        GEOSGeometry_destroy_r(idx->geos_ctx, item_geom);
+        item_geom = NULL;
+    }
+
+    // Notice we're not resetting i to 0
+    // before iterating of items.
+    for(; i < num_items && docids.size() < limit; i++) {
+        if(!item_to_docid_and_wkb(items[i], docid, wkb)) {
+            goto done;
+        }
+        
+        item_geom = easton_geom_from_wkb(idx, &(wkb[0]), wkb.size());
+        if(item_geom == NULL) {
+            goto done;
+        }
+        
+        if((*filt)(idx->geos_ctx, pq, item_geom) == 1) {
+            docids.push_back(docid);
+            wkbs.push_back(wkb);
+        }
+        
+        GEOSGeometry_destroy_r(idx->geos_ctx, item_geom);
+        item_geom = NULL;
+    }
+
+    return true;
+    
+done:
+    if(pg != NULL) {
+        GEOSPreparedGeometry_destroy_r(pg);
+    }
+
+    if(item_geom != NULL) {
+        GEOSGeometry_destroy_r(item_geom);
+    }
+
+    if(bounds != NULL) {
+        free_bounds(bounds);
+    }
+    
+    if(items != NULL) {
+        Index_DestroyObjResults(items, num_results);
+    }
+    
     return ret;
 }

@@ -21,6 +21,25 @@ easton_is_dir(const int8_t* path)
 
 
 bool
+easton_read_uint8(const uint8_t** cmd, uint32_t* cmdlen, uint8_t* ret)
+{
+    uint8_t val;
+
+    if(*cmdlen < sizeof(val)) {
+        return false;
+    }
+
+    memcpy(&val, *cmd, sizeof(val));
+
+    *cmd += sizeof(val);
+    *cmdlen -= sizeof(val);
+    *ret = val;
+
+    return true;
+}
+
+
+bool
 easton_read_uint16(const uint8_t** cmd, uint32_t* cmdlen, uint16_t* ret)
 {
     uint16_t op;
@@ -122,6 +141,20 @@ easton_read_binary(const uint8_t** cmd, uint32_t* cmdlen,
 }
 
 
+bool
+easton_read_binary(const uint8_t** cmd, uint32_t* cmdlen, bytes& val)
+{
+    const uint8_t* val;
+    uint32_t len;
+    
+    if(!easton_read_binary(cmd, cmdlen, &val, &len)) {
+        return false;
+    }
+    
+    val = bytes(val, val + len);
+}
+
+
 void
 easton_write_uint32(uint8_t* buf, uint32_t val)
 {
@@ -145,4 +178,12 @@ easton_write_double(uint8_t* buf, double val)
 
     memcpy(&tmp, &val, sizeof(double)); // Assumes double is 64 bits
     easton_write_uint64(buf, tmp);
+}
+
+
+void
+easton_write_binary(uint8_t* buf, uint8_t* val, uint32_t len)
+{
+    easton_write_uint32(buf, len);
+    memcpy(buf+sizeof(uint32_t), val, len);
 }

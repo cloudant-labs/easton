@@ -37,6 +37,11 @@ ERROR_BAD_NUM_WKBS      22
 ERROR_BAD_WKB           23
 ERROR_BAD_DOC_ID_VAL    24
 ERROR_BAD_DOC_NUM_INC   25
+ERROR_BAD_FILTER        26
+ERROR_BAD_NEAREST       27
+ERROR_BAD_LIMIT         28
+ERROR_BAD_OFFSET        29
+ERROR_BAD_QUERY         30
 
 
 # Filenames
@@ -65,4 +70,19 @@ COMMAND_QUERY               12
 COMMAND_QUERY_TP            13
 COMMAND_NEAREST             14
 COMMAND_NEAREST_TP          15
+
+
+
+# Filters
+FILTER_NONE                 0
+FILTER_CONTAINS             1
+FILTER_CONTAINS_PROPERLY    2
+FILTER_COVERED_BY           3
+FILTER_COVERS               4
+FILTER_CROSSES              5
+FILTER_DISJOINT             6
+FILTER_INTERSECTS           7
+FILTER_OVERLAPS             8
+FILTER_TOUCHES              9
+FILTER_WITHIN               10
 
