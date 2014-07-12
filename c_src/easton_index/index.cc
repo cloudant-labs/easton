@@ -143,7 +143,7 @@ Index::update(io::Bytes::Ptr docid, io::Bytes::Vector wkbs)
     }
 
     io::Bytes::Ptr val = this->make_id_value(docnum, bounds);
-    this->put_kv(dockey, val);
+    this->store->put_kv(dockey, val);
 
     for(uint32_t i = 0; i < wkbs.size(); i++) {
         val = this->make_geo_value(docid, wkbs[i]);
@@ -164,7 +164,7 @@ Index::remove(io::Bytes::Ptr docid)
 {
     io::Transaction::Ptr tx = io::Transaction::open(this->store);
     io::Bytes::Ptr dockey = this->store->make_key("docid", docid);
-    io::Bytes::Ptr val = this->get_kv(dockey);
+    io::Bytes::Ptr val = this->store->get_kv(dockey);
     geo::Bounds::Vector bounds;
     uint64_t docnum = this->read_id_value(val, bounds);
 
@@ -175,7 +175,7 @@ Index::remove(io::Bytes::Ptr docid)
         }
     }
 
-    this->del_kv(dockey);
+    this->store->del_kv(dockey);
     tx->commit();
 }
 
@@ -323,7 +323,7 @@ Index::init_geo_idx(int argc, const char* argv[])
 uint64_t
 Index::get_docid_num(io::Bytes::Ptr docid_key)
 {
-    io::Bytes::Ptr val = this->get_kv(docid_key);
+    io::Bytes::Ptr val = this->store->get_kv(docid_key);
     uint64_t ret;
 
     if(!val) {
@@ -339,7 +339,7 @@ Index::get_docid_num(io::Bytes::Ptr docid_key)
     io::Writer::Ptr writer = io::Writer::create();
     writer->write(ret);
     val = writer->serialize();
-    this->put_kv(this->docid_num_key, val);
+    this->store->put_kv(this->docid_num_key, val);
 
     return ret;
 }
