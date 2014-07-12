@@ -53,7 +53,7 @@ get_missing_(Idx) ->
 
 del_missing_(Idx) ->
     [
-        ?_assertEqual(false, easton_index:del(Idx, not_a_key))
+        ?_assertEqual(ok, easton_index:del(Idx, not_a_key))
     ].
 
 
@@ -78,7 +78,7 @@ put_get_put_get_(Idx) ->
 put_del_get_(Idx) ->
     [
         ?_assertEqual(ok, easton_index:put(Idx, pdg, thing)),
-        ?_assertEqual(true, easton_index:del(Idx, pdg)),
+        ?_assertEqual(ok, easton_index:del(Idx, pdg)),
         ?_assertEqual(false, easton_index:get(Idx, pdg))
     ].
 
@@ -87,6 +87,6 @@ put_get_del_(Idx) ->
     [
         ?_assertEqual(ok, easton_index:put(Idx, pgd, newthing)),
         ?_assertEqual({pgd, newthing}, easton_index:get(Idx, pgd)),
-        ?_assertEqual(true, easton_index:del(Idx, pgd))
+        ?_assertEqual(ok, easton_index:del(Idx, pgd))
     ].
 

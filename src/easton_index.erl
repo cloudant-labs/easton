@@ -144,10 +144,8 @@ get(Index, Key, Default) ->
 
 del(Index, Key) ->
     case cmd(Index, ?EASTON_COMMAND_DEL_USER_KV, ukey(Key)) of
-        true ->
-            true;
-        false ->
-            false;
+        ok ->
+            ok;
         Else ->
             throw(Else)
     end.

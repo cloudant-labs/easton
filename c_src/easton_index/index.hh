@@ -3,7 +3,6 @@
 #define EASTON_INDEX_HH
 
 
-#include <tchdb.h>
 #include <spatialindex/capi/sidx_api.h>
 
 #include "easton.hh"
@@ -33,7 +32,7 @@ class Index
 
         void put_kv(io::Bytes::Ptr key, io::Bytes::Ptr val);
         io::Bytes::Ptr get_kv(io::Bytes::Ptr key);
-        bool del_kv(io::Bytes::Ptr key);
+        void del_kv(io::Bytes::Ptr key);
 
         void update(io::Bytes::Ptr docid, io::Bytes::Vector wkbs);
         void remove(io::Bytes::Ptr docid);
@@ -45,7 +44,7 @@ class Index
         Index(int argc, const char* argv[]);
         Index(const Index& other);
 
-        void init_id_idx();
+        void init_storage();
         void init_geo_idx(int argc, const char* argv[]);
 
         io::Bytes::Ptr make_dockey(io::Bytes::Ptr docid);
@@ -63,10 +62,9 @@ class Index
                 io::Bytes::Ptr& docid, io::Bytes::Ptr& wkb);
 
         std::string base_dir;
-        std::string id_file;
         std::string geo_file;
 
-        TCHDB* id_idx;
+        io::Storage::Ptr store;
         IndexH geo_idx;
         geo::Util::Ptr geo_util;
 

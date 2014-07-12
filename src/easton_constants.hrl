@@ -40,7 +40,6 @@
 -define(EASTON_ERROR_BAD_QUERY, 30).
 
 
--define(EASTON_FILE_ID_IDX, "id_idx.tch").
 -define(EASTON_FILE_GEO_IDX, "geo_idx").
 
 

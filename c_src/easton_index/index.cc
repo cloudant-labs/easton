@@ -1,4 +1,6 @@
 
+#include <stdlib.h>
+
 #include "config.hh"
 #include "exceptions.hh"
 #include "index.hh"
@@ -28,10 +30,9 @@ Index::Index(int argc, const char* argv[])
         throw EastonException("Index directory does not exist.");
     }
 
-    this->id_file = (this->base_dir + "/") + EASTON_FILE_ID_IDX;
     this->geo_file = (this->base_dir + "/") + EASTON_FILE_GEO_IDX;
 
-    this->init_id_idx();
+    this->init_storage();
     this->init_geo_idx(argc, argv);
 
     this->geo_util = geo::Util::create();
@@ -41,8 +42,7 @@ Index::Index(int argc, const char* argv[])
 Index::~Index()
 {
     Index_Destroy(this->geo_idx);
-    tchdbclose(this->id_idx);
-    tchdbdel(this->id_idx);
+    this->store.reset();
 }
 
 
@@ -50,10 +50,6 @@ void
 Index::sync()
 {
     Index_Flush(this->geo_idx);
-
-    if(!tchdbsync(this->id_idx)) {
-        throw EastonException("Error synchronizing id index.");
-    }
 }
 
 
@@ -104,40 +100,21 @@ done:
 void
 Index::put_kv(io::Bytes::Ptr key, io::Bytes::Ptr val)
 {
-    if(!tchdbput(this->id_idx,
-            key->get(), (int32_t) key->size(),
-            val->get(), (int32_t) val->size()))
-    {
-        throw EastonException("Error inserting key/value pair.");
-    }
+    this->store->put_kv(key, val);
 }
 
 
 io::Bytes::Ptr
 Index::get_kv(io::Bytes::Ptr key)
 {
-    int32_t len;
-
-    len = tchdbvsiz(this->id_idx, key->get(), (int32_t) key->size());
-    if(len < 0) {
-        return NULL;
-    }
-
-    io::Bytes::Ptr val = io::Bytes::create(len);
-
-    if(tchdbget3(this->id_idx,
-            key->get(), (int32_t) key->size(), val->get(), len) < 0) {
-        throw EastonException("Error getting key after finding its size.");
-    }
-
-    return val;
+    return this->store->get_kv(key);
 }
 
 
-bool
+void
 Index::del_kv(io::Bytes::Ptr key)
 {
-    return tchdbout(this->id_idx, key->get(), key->size());
+    this->store->del_kv(key);
 }
 
 
@@ -224,18 +201,13 @@ Index::query(geo::Bounds::Ptr query, bool nearest)
 
 
 void
-Index::init_id_idx()
+Index::init_storage()
 {
-    int32_t flags = HDBOWRITER | HDBOCREAT;
     io::Bytes::Ptr key = io::Bytes::proxy(DOC_ID_NUM_KEY);
     io::Bytes::Ptr val;
 
-    this->id_idx = tchdbnew();
-    if(!tchdbopen(this->id_idx, (char*) this->id_file.c_str(), flags)) {
-        throw EastonException("Error opening ID index.");
-    }
-
-    val = this->get_kv(key);
+    this->store = io::Storage::create(this->base_dir);
+    val = this->store->get_kv(key);
 
     if(!val) {
         this->doc_id_num = 0;
@@ -254,8 +226,8 @@ Index::init_geo_idx(int argc, const char* argv[])
 {
     IndexPropertyH props = IndexProperty_Create();
 
-    int64_t idx_type = tcatoi(argv[2]);
-    int64_t dims = tcatoi(argv[3]);
+    int64_t idx_type = atoi(argv[2]);
+    int64_t dims = atoi(argv[3]);
 
     RTIndexType it;
 

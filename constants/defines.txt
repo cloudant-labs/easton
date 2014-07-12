@@ -45,7 +45,6 @@ ERROR_BAD_QUERY         30
 
 
 # Filenames
-FILE_ID_IDX             "id_idx.tch"
 FILE_GEO_IDX            "geo_idx"
 
 

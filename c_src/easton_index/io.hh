@@ -6,6 +6,7 @@
 #include "ei.h"
 
 #include "easton.hh"
+#include <leveldb/db.h>
 
 
 NS_EASTON_BEGIN
@@ -26,11 +27,16 @@ class Bytes
         static Ptr create(uint32_t len);
         static Ptr create(uint8_t* data, uint32_t len);
 
+        // Create objects by copying the provided memory
+        static Ptr copy(uint8_t* data, uint32_t len);
+
         // Create objects that only proxy to the underlying memory
         static Ptr proxy(const char* data);
         static Ptr proxy(uint8_t* data, uint32_t len);
 
         ~Bytes();
+
+        leveldb::Slice slice();
 
         uint8_t* get();
         uint32_t size();
@@ -109,6 +115,31 @@ class Writer
         Writer(const Writer& other);
 
         ei_x_buff* buff;
+};
+
+
+class Storage
+{
+    public:
+        typedef std::shared_ptr<Storage> Ptr;
+
+        static Ptr create(std::string dirname);
+        ~Storage();
+
+        void put_kv(Bytes::Ptr key, Bytes::Ptr val);
+        Bytes::Ptr get_kv(Bytes::Ptr key);
+        void del_kv(Bytes::Ptr key);
+
+    private:
+        Storage();
+        Storage(std::string dirname);
+        Storage(const Storage& other);
+
+        std::string dirname;
+        leveldb::DB* db;
+        leveldb::Options o_opts;
+        leveldb::ReadOptions r_opts;
+        leveldb::WriteOptions w_opts;
 };
 
 

@@ -5,6 +5,7 @@
 
 #include <string>
 
+#include <leveldb/filter_policy.h>
 
 #include "config.hh"
 #include "exceptions.hh"
@@ -47,6 +48,15 @@ Bytes::create(uint8_t* data, uint32_t len)
 
 
 Bytes::Ptr
+Bytes::copy(uint8_t* data, uint32_t len)
+{
+    Ptr p(new Bytes(len));
+    memcpy(p->get(), data, len);
+    return p;
+}
+
+
+Bytes::Ptr
 Bytes::proxy(const char* data)
 {
     return Ptr(new Bytes((uint8_t*) data, strlen(data), false));
@@ -83,6 +93,12 @@ Bytes::~Bytes()
     }
 }
 
+
+leveldb::Slice
+Bytes::slice()
+{
+    return leveldb::Slice((char*) this->data, this->len);
+}
 
 uint8_t*
 Bytes::get()
@@ -398,6 +414,76 @@ Writer::write_empty_list()
 {
     if(!ei_x_encode_empty_list(this->buff)) {
         throw EastonException("Unable to encode empty list.");
+    }
+}
+
+
+Storage::Ptr
+Storage::create(std::string dirname)
+{
+    return Ptr(new Storage(dirname));
+}
+
+
+Storage::Storage(std::string dirname)
+{
+    this->dirname = dirname;
+
+    this->o_opts.create_if_missing = true;
+    this->o_opts.paranoid_checks = true;
+    this->o_opts.filter_policy = leveldb::NewBloomFilterPolicy(10);
+
+    this->r_opts.verify_checksums = true;
+    this->r_opts.fill_cache = true;
+
+    this->w_opts.sync = false;
+
+    leveldb::Status s = leveldb::DB::Open(this->o_opts, dirname, &this->db);
+    if(!s.ok()) {
+        throw EastonException("Error opening storage layer: " + s.ToString());
+    }
+}
+
+
+Storage::~Storage()
+{
+    delete this->db;
+}
+
+
+void
+Storage::put_kv(Bytes::Ptr key, Bytes::Ptr val)
+{
+    leveldb::Status s = this->db->Put(this->w_opts, key->slice(), val->slice());
+    if(!s.ok()) {
+        throw EastonException("Error storing key: " + s.ToString());
+    }
+}
+
+
+Bytes::Ptr
+Storage::get_kv(Bytes::Ptr key)
+{
+    std::string val;
+    leveldb::Status s = this->db->Get(this->r_opts, key->slice(), &val);
+    if(!s.ok() && !s.IsNotFound()) {
+        throw EastonException("Error retrieving key: " + s.ToString());
+    }
+
+    if(s.IsNotFound()) {
+        return NULL;
+    }
+
+    return Bytes::copy((uint8_t*) val.data(), val.size());
+}
+
+
+void
+Storage::del_kv(Bytes::Ptr key)
+{
+    leveldb::Status s = this->db->Delete(this->w_opts, key->slice());
+    if(!s.ok()) {
+        throw EastonException("Error deleting key: " + s.ToString());
     }
 }
 

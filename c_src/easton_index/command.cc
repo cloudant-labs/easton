@@ -172,10 +172,10 @@ del_user_kv(easton::Index::Ptr idx, io::Reader::Ptr reader)
         throw EastonException("Invalid argument for del_user_kv.");
     }
 
-    bool ret = idx->del_kv(key);
+    idx->del_kv(key);
 
     io::Writer::Ptr writer = io::Writer::create();
-    writer->write(ret);
+    writer->write("ok");
 
     return writer;
 }
