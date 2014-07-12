@@ -592,16 +592,6 @@ Storage::make_key(const char* tag, io::Bytes::Ptr val)
 }
 
 
-void
-Storage::put_kv(Bytes::Ptr key, Bytes::Ptr val)
-{
-    leveldb::Status s = this->db->Put(this->w_opts, key->slice(), val->slice());
-    if(!s.ok()) {
-        throw EastonException("Error storing key: " + s.ToString());
-    }
-}
-
-
 Bytes::Ptr
 Storage::get_kv(Bytes::Ptr key)
 {
@@ -620,12 +610,28 @@ Storage::get_kv(Bytes::Ptr key)
 
 
 void
+Storage::put_kv(Bytes::Ptr key, Bytes::Ptr val)
+{
+    Transaction::Ptr t = this->tx.lock();
+
+    if(!t) {
+        throw EastonException("No transaction in progress.");
+    }
+
+    t->put_kv(key, val);
+}
+
+
+void
 Storage::del_kv(Bytes::Ptr key)
 {
-    leveldb::Status s = this->db->Delete(this->w_opts, key->slice());
-    if(!s.ok()) {
-        throw EastonException("Error deleting key: " + s.ToString());
+    Transaction::Ptr t = this->tx.lock();
+
+    if(!t) {
+        throw EastonException("No transaction in progress.");
     }
+
+    t->del_kv(key);
 }
 
 
@@ -646,6 +652,95 @@ Storage::new_geoid()
     this->put_kv(this->geoid_num_key, writer->serialize());
 
     return ret;
+}
+
+
+void
+Storage::set_transaction(TxMonitor tx)
+{
+    if(!this->tx.expired()) {
+        throw EastonException("Transaction already in progress.");
+    }
+
+    this->tx = tx;
+}
+
+
+void
+Storage::write(leveldb::WriteBatch* batch)
+{
+    leveldb::Status s = this->db->Write(this->w_opts, batch);
+    if(!s.ok()) {
+        throw EastonException("Error writing batch: " + s.ToString());
+    }
+}
+
+
+Transaction::Transaction(Storage::Ptr store, bool is_autocommit)
+{
+    this->store = store;
+    this->is_autocommit = is_autocommit;
+    this->batch = WBPtr(new leveldb::WriteBatch());
+}
+
+
+Transaction::~Transaction()
+{
+    if(this->is_autocommit && this->batch) {
+        this->commit();
+    }
+}
+
+
+Transaction::Ptr
+Transaction::open(Storage::Ptr store)
+{
+    Ptr tx(new Transaction(store, false));
+    store->set_transaction(tx);
+    return tx;
+}
+
+
+Transaction::Ptr
+Transaction::autocommit(Storage::Ptr store)
+{
+    Ptr tx(new Transaction(store, true));
+    store->set_transaction(tx);
+    return tx;
+}
+
+
+void
+Transaction::commit()
+{
+    // Copy and reset our batch before attempting
+    // to commit. This way if the commit write fails
+    // we can't retry the same write accidentally.
+    WBPtr b = this->batch;
+    this->batch.reset();
+    this->store->write(b.get());
+}
+
+
+void
+Transaction::put_kv(Bytes::Ptr key, Bytes::Ptr val)
+{
+    if(!this->batch) {
+        throw EastonException("Transaction already committed.");
+    }
+
+    this->batch->Put(key->slice(), val->slice());
+}
+
+
+void
+Transaction::del_kv(Bytes::Ptr key)
+{
+    if(!this->batch) {
+        throw EastonException("Transaction already committed.");
+    }
+
+    this->batch->Delete(key->slice());
 }
 
 

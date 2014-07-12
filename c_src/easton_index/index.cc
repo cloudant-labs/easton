@@ -95,6 +95,7 @@ done:
 void
 Index::put_kv(io::Bytes::Ptr user_key, io::Bytes::Ptr val)
 {
+    io::Transaction::Ptr tx = io::Transaction::autocommit(this->store);
     io::Bytes::Ptr key = this->store->make_key("user", user_key);
     this->store->put_kv(key, val);
 }
@@ -111,6 +112,7 @@ Index::get_kv(io::Bytes::Ptr user_key)
 void
 Index::del_kv(io::Bytes::Ptr user_key)
 {
+    io::Transaction::Ptr tx = io::Transaction::autocommit(this->store);
     io::Bytes::Ptr key = this->store->make_key("user", user_key);
     this->store->del_kv(key);
 }
@@ -119,6 +121,7 @@ Index::del_kv(io::Bytes::Ptr user_key)
 void
 Index::update(io::Bytes::Ptr docid, io::Bytes::Vector wkbs)
 {
+    io::Transaction::Ptr tx = io::Transaction::open(this->store);
     io::Bytes::Ptr dockey = this->store->make_key("docid", docid);
     uint64_t docnum = this->get_docid_num(dockey);
     geo::Bounds::Vector bounds;
@@ -140,12 +143,15 @@ Index::update(io::Bytes::Ptr docid, io::Bytes::Vector wkbs)
             throw EastonException("Error updating geo index.");
         }
     }
+
+    tx->commit();
 }
 
 
 void
 Index::remove(io::Bytes::Ptr docid)
 {
+    io::Transaction::Ptr tx = io::Transaction::open(this->store);
     io::Bytes::Ptr dockey = this->store->make_key("docid", docid);
     io::Bytes::Ptr val = this->get_kv(dockey);
     geo::Bounds::Vector bounds;
@@ -159,6 +165,7 @@ Index::remove(io::Bytes::Ptr docid)
     }
 
     this->del_kv(dockey);
+    tx->commit();
 }
 
 
@@ -218,6 +225,7 @@ Index::init_storage()
 void
 Index::init_geo_idx(int argc, const char* argv[])
 {
+    io::Transaction::Ptr tx = io::Transaction::autocommit(this->store);
     IndexPropertyH props = IndexProperty_Create();
 
     int64_t idx_type = atoi(argv[2]);

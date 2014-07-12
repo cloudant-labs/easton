@@ -3,6 +3,7 @@
 #define EASTON_IO_HH
 
 #include <leveldb/db.h>
+#include <leveldb/write_batch.h>
 #include <spatialindex/capi/sidx_api.h>
 #include <spatialindex/capi/CustomStorage.h>
 
@@ -126,6 +127,10 @@ class Writer
 };
 
 
+class Transaction;
+typedef std::weak_ptr<Transaction> TxMonitor;
+
+
 class Storage
 {
     public:
@@ -137,8 +142,8 @@ class Storage
         io::Bytes::Ptr make_key(const char* tag, const char* val);
         io::Bytes::Ptr make_key(const char* tag, io::Bytes::Ptr val);
 
-        void put_kv(Bytes::Ptr key, Bytes::Ptr val);
         Bytes::Ptr get_kv(Bytes::Ptr key);
+        void put_kv(Bytes::Ptr key, Bytes::Ptr val);
         void del_kv(Bytes::Ptr key);
 
         void* get_storage_manager();
@@ -149,15 +154,48 @@ class Storage
         Storage(std::string dirname);
         Storage(const Storage& other);
 
+        void set_transaction(TxMonitor tx);
+        void write(leveldb::WriteBatch* batch);
+
         std::string dirname;
         leveldb::DB* db;
         leveldb::Options o_opts;
         leveldb::ReadOptions r_opts;
         leveldb::WriteOptions w_opts;
+        TxMonitor tx;
 
         Bytes::Ptr geoid_num_key;
         int64_t geoid_num;
         SpatialIndexStorageManager sm;
+
+        friend class Transaction;
+};
+
+
+class Transaction
+{
+    public:
+        typedef std::shared_ptr<Transaction> Ptr;
+        typedef std::shared_ptr<leveldb::WriteBatch> WBPtr;
+
+        static Ptr open(Storage::Ptr store);
+        static Ptr autocommit(Storage::Ptr store);
+        ~Transaction();
+
+        void commit();
+
+    private:
+        Transaction(Storage::Ptr store, bool is_autocommit);
+        Transaction(const Transaction& other);
+
+        void put_kv(Bytes::Ptr key, Bytes::Ptr val);
+        void del_kv(Bytes::Ptr key);
+
+        Storage::Ptr store;
+        WBPtr batch;
+        bool is_autocommit;
+
+        friend class Storage;
 };
 
 
