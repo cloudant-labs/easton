@@ -1,5 +1,6 @@
 
-
+#include <execinfo.h>
+#include <signal.h>
 #include <unistd.h>
 #include <arpa/inet.h>
 
@@ -14,6 +15,32 @@ using namespace easton;
 
 
 NS_EASTON_BEGIN
+
+
+void
+show_stack(int sig)
+{
+    void* frames[64];
+    size_t size;
+
+    size = backtrace(frames, 10);
+
+    fprintf(stderr, "Error: Signal %d:\n", sig);
+    backtrace_symbols_fd(frames, size, STDERR_FILENO);
+    exit(255);
+}
+
+
+static void
+init_signals()
+{
+    signal(SIGINT, show_stack);
+    signal(SIGQUIT, show_stack);
+    signal(SIGABRT, show_stack);
+    signal(SIGKILL, show_stack);
+    signal(SIGBUS, show_stack);
+    signal(SIGSEGV, show_stack);
+}
 
 
 static void
@@ -46,6 +73,7 @@ init_csmap()
 void
 init()
 {
+    init_signals();
     report_pid();
     init_csmap();
 }

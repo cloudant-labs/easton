@@ -1,4 +1,5 @@
 
+#include <stdio.h>
 #include <unistd.h>
 #include <arpa/inet.h>
 #include <sys/stat.h>
@@ -12,8 +13,78 @@
 #include "io.hh"
 
 
+typedef SpatialIndex::StorageManager::CustomStorageManager CSM;
+
+
 NS_EASTON_BEGIN
 NS_EASTON_IO_BEGIN
+
+
+Bytes::Ptr
+geo_key(const int64_t id)
+{
+    Writer::Ptr writer = Writer::create();
+    writer->start_tuple(2);
+    writer->write("geoid");
+    writer->write(id);
+    return writer->serialize();
+}
+
+
+Storage*
+get_storage(const void* context)
+{
+    return const_cast<Storage*>(static_cast<const Storage*>(context));
+}
+
+
+void
+sm_load_cb(const void* context,
+        const int64_t id, uint32_t* len, uint8_t** data, int* err)
+{
+    Storage* s = get_storage(context);
+    Bytes::Ptr key = geo_key(id);
+    Bytes::Ptr val = s->get_kv(key);
+
+    if(!val) {
+        *len = 0;
+        *data = NULL;
+        *err = CSM::InvalidPageError;
+        return;
+    }
+
+    *len = val->size();
+    *data = new uint8_t[val->size()];
+    memcpy(*data, val->get(), val->size());
+
+    *err = CSM::NoError;
+}
+
+void
+sm_store_cb(const void* context,
+        int64_t* id, const uint32_t len, const uint8_t* const data, int* err)
+{
+    Storage* s = get_storage(context);
+    *id = s->new_geoid();
+
+    // TODO: Figure out how to make a const proxy.
+    Bytes::Ptr key = geo_key(*id);
+    Bytes::Ptr val = Bytes::copy(data, len);
+
+    s->put_kv(key, val);
+
+    *err = CSM::NoError;
+}
+
+
+void
+sm_delete_cb(const void* context, const int64_t id, int* err)
+{
+    Storage* s = get_storage(context);
+    Bytes::Ptr key = geo_key(id);
+    s->del_kv(key);
+    *err = CSM::NoError;
+}
 
 
 bool
@@ -48,7 +119,7 @@ Bytes::create(uint8_t* data, uint32_t len)
 
 
 Bytes::Ptr
-Bytes::copy(uint8_t* data, uint32_t len)
+Bytes::copy(const uint8_t* const data, uint32_t len)
 {
     Ptr p(new Bytes(len));
     memcpy(p->get(), data, len);
@@ -185,6 +256,19 @@ Reader::read(bool& val)
     return true;
 }
 
+
+bool
+Reader::read(int64_t& val)
+{
+    if(ei_decode_longlong(
+            (char*) this->data->get(), &(this->pos), &val) != 0) {
+        return false;
+    }
+
+    return true;
+}
+
+
 bool
 Reader::read(uint64_t& val)
 {
@@ -304,7 +388,7 @@ Writer::create()
 
 Writer::Writer()
 {
-    buff = new ei_x_buff;
+    this->buff = new ei_x_buff;
     if(ei_x_new_with_version(buff) != 0) {
         throw EastonException("Error initializing Writer buffer.");
     }
@@ -313,7 +397,7 @@ Writer::Writer()
 
 Writer::~Writer()
 {
-    if(ei_x_free(buff) != 0) {
+    if(ei_x_free(this->buff) != 0) {
         throw EastonException("Error destroying Writer buffer.");
     }
 
@@ -342,7 +426,15 @@ Writer::send()
 Bytes::Ptr
 Writer::serialize()
 {
-    return Bytes::create((uint8_t*) this->buff->buff, this->buff->index);
+    // This needs to be a copy because the Bytes::Ptr may
+    // outlive the underlying ei_x_buff object if this
+    // writer is destroyed.
+    //
+    // Surely there's a way to fix the lifetime thing but
+    // that's a todo.
+    //
+    // TODO: Fix buffer lifetime issue here to avoid memcpy
+    return Bytes::copy((uint8_t*) this->buff->buff, this->buff->index);
 }
 
 
@@ -360,6 +452,15 @@ Writer::write(const char* val)
 {
     if(ei_x_encode_atom(this->buff, val) != 0) {
         throw EastonException("Unable to encode atom value.");
+    }
+}
+
+
+void
+Writer::write(int64_t val)
+{
+    if(ei_x_encode_longlong(this->buff, val) != 0) {
+        throw EastonException("Unable to encode int64_t value.");
     }
 }
 
@@ -442,12 +543,52 @@ Storage::Storage(std::string dirname)
     if(!s.ok()) {
         throw EastonException("Error opening storage layer: " + s.ToString());
     }
+
+    this->sm.context = (void*) this;
+    this->sm.loadByteArrayCallback = sm_load_cb;
+    this->sm.storeByteArrayCallback = sm_store_cb;
+    this->sm.deleteByteArrayCallback = sm_delete_cb;
+
+    this->geoid_num_key = this->make_key("meta", "geoid_num");
+    io::Bytes::Ptr val = this->get_kv(this->geoid_num_key);
+
+    if(!val) {
+        this->geoid_num = 0;
+    } else {
+        io::Reader::Ptr reader = io::Reader::create(val);
+
+        if(!reader->read(this->geoid_num)) {
+            throw EastonException("Error reading geo id number.");
+        }
+    }
 }
 
 
 Storage::~Storage()
 {
     delete this->db;
+}
+
+
+io::Bytes::Ptr
+Storage::make_key(const char* tag, const char* val)
+{
+    io::Writer::Ptr writer = io::Writer::create();
+    writer->start_tuple(2);
+    writer->write(tag);
+    writer->write(val);
+    return writer->serialize();
+}
+
+
+io::Bytes::Ptr
+Storage::make_key(const char* tag, io::Bytes::Ptr val)
+{
+    io::Writer::Ptr writer = io::Writer::create();
+    writer->start_tuple(2);
+    writer->write(tag);
+    writer->write(val);
+    return writer->serialize();
 }
 
 
@@ -485,6 +626,26 @@ Storage::del_kv(Bytes::Ptr key)
     if(!s.ok()) {
         throw EastonException("Error deleting key: " + s.ToString());
     }
+}
+
+
+void*
+Storage::get_storage_manager()
+{
+    return &(this->sm);
+}
+
+
+int64_t
+Storage::new_geoid()
+{
+    int64_t ret = this->geoid_num++;
+
+    io::Writer::Ptr writer = io::Writer::create();
+    writer->write(ret);
+    this->put_kv(this->geoid_num_key, writer->serialize());
+
+    return ret;
 }
 
 

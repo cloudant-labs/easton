@@ -43,9 +43,6 @@
 #define EASTON_ERROR_BAD_QUERY 30
 
 
-#define EASTON_FILE_GEO_IDX "geo_idx"
-
-
 #define EASTON_INDEX_TYPE_RTREE 1
 #define EASTON_INDEX_TYPE_TPRTREE 2
 

@@ -8,7 +8,7 @@
 
 NS_EASTON_BEGIN
 
-
+void show_stack(int sig);
 void init();
 
 

@@ -1,8 +1,5 @@
 
-#include <execinfo.h>
-#include <signal.h>
 #include <stdio.h>
-#include <unistd.h>
 
 #include "command.hh"
 #include "exceptions.hh"
@@ -14,25 +11,9 @@
 using namespace easton;
 
 
-void
-show_stack(int sig)
-{
-    void* frames[64];
-    size_t size;
-
-    size = backtrace(frames, 10);
-
-    fprintf(stderr, "Error: Signal %d:\n", sig);
-    backtrace_symbols_fd(frames, size, STDERR_FILENO);
-    exit(255);
-}
-
-
 int
 main(int argc, const char* argv[])
 {
-    signal(SIGSEGV, show_stack);
-
     try {
         init();
 

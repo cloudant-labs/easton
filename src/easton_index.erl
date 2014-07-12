@@ -114,7 +114,7 @@ doc_count(Index) ->
 
 
 put(Index, Key, Value) ->
-    case cmd(Index, ?EASTON_COMMAND_PUT_USER_KV, {ukey(Key), t2b(Value)}) of
+    case cmd(Index, ?EASTON_COMMAND_PUT_USER_KV, {t2b(Key), t2b(Value)}) of
         ok ->
             ok;
         Else ->
@@ -123,7 +123,7 @@ put(Index, Key, Value) ->
 
 
 get(Index, Key) ->
-    case cmd(Index, ?EASTON_COMMAND_GET_USER_KV, ukey(Key)) of
+    case cmd(Index, ?EASTON_COMMAND_GET_USER_KV, t2b(Key)) of
         {ok, VBin} ->
             {Key, binary_to_term(VBin, [safe])};
         false ->
@@ -143,7 +143,7 @@ get(Index, Key, Default) ->
 
 
 del(Index, Key) ->
-    case cmd(Index, ?EASTON_COMMAND_DEL_USER_KV, ukey(Key)) of
+    case cmd(Index, ?EASTON_COMMAND_DEL_USER_KV, t2b(Key)) of
         ok ->
             ok;
         Else ->
@@ -338,12 +338,6 @@ kill_cmd(OsPid) ->
         {win32, _} -> "taskkill /PID ~b"
     end,
     lists:flatten(io_lib:format(Fmt, [OsPid])).
-
-
-ukey(Term) ->
-    Bin = t2b(Term),
-    Len = size(Bin),
-    <<Len:32/big-unsigned-integer, Bin/binary>>.
 
 
 t2b(T) ->

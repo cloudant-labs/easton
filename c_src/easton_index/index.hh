@@ -47,9 +47,7 @@ class Index
         void init_storage();
         void init_geo_idx(int argc, const char* argv[]);
 
-        io::Bytes::Ptr make_dockey(io::Bytes::Ptr docid);
-
-        uint64_t get_doc_num(io::Bytes::Ptr docid);
+        uint64_t get_docid_num(io::Bytes::Ptr docid);
 
         io::Bytes::Ptr make_id_value(
                 uint64_t docnum, geo::Bounds::Vector bounds);
@@ -61,15 +59,16 @@ class Index
         void read_geo_value(IndexItemH item,
                 io::Bytes::Ptr& docid, io::Bytes::Ptr& wkb);
 
-        std::string base_dir;
-        std::string geo_file;
+        std::string db_dir;
 
         io::Storage::Ptr store;
         IndexH geo_idx;
         geo::Util::Ptr geo_util;
 
+        io::Bytes::Ptr docid_num_key;
+
         uint64_t dimensions;
-        uint64_t doc_id_num;
+        uint64_t docid_num;
 };
 
 

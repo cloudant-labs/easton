@@ -44,10 +44,6 @@ ERROR_BAD_OFFSET        29
 ERROR_BAD_QUERY         30
 
 
-# Filenames
-FILE_GEO_IDX            "geo_idx"
-
-
 # Index Types
 INDEX_TYPE_RTREE        1
 INDEX_TYPE_TPRTREE      2

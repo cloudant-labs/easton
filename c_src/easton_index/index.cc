@@ -6,9 +6,6 @@
 #include "index.hh"
 
 
-#define DOC_ID_NUM_KEY "meta:doc_id_num"
-
-
 NS_EASTON_BEGIN
 
 
@@ -25,12 +22,10 @@ Index::Index(int argc, const char* argv[])
         throw EastonException("Not enough arguments for index creation.");
     }
 
-    this->base_dir = argv[1];
-    if(!io::is_dir(this->base_dir)) {
+    this->db_dir = argv[1];
+    if(!io::is_dir(this->db_dir)) {
         throw EastonException("Index directory does not exist.");
     }
-
-    this->geo_file = (this->base_dir + "/") + EASTON_FILE_GEO_IDX;
 
     this->init_storage();
     this->init_geo_idx(argc, argv);
@@ -56,7 +51,7 @@ Index::sync()
 uint64_t
 Index::curr_docid_num()
 {
-    return this->doc_id_num;
+    return this->docid_num;
 }
 
 
@@ -98,22 +93,25 @@ done:
 
 
 void
-Index::put_kv(io::Bytes::Ptr key, io::Bytes::Ptr val)
+Index::put_kv(io::Bytes::Ptr user_key, io::Bytes::Ptr val)
 {
+    io::Bytes::Ptr key = this->store->make_key("user", user_key);
     this->store->put_kv(key, val);
 }
 
 
 io::Bytes::Ptr
-Index::get_kv(io::Bytes::Ptr key)
+Index::get_kv(io::Bytes::Ptr user_key)
 {
+    io::Bytes::Ptr key = this->store->make_key("user", user_key);
     return this->store->get_kv(key);
 }
 
 
 void
-Index::del_kv(io::Bytes::Ptr key)
+Index::del_kv(io::Bytes::Ptr user_key)
 {
+    io::Bytes::Ptr key = this->store->make_key("user", user_key);
     this->store->del_kv(key);
 }
 
@@ -121,11 +119,9 @@ Index::del_kv(io::Bytes::Ptr key)
 void
 Index::update(io::Bytes::Ptr docid, io::Bytes::Vector wkbs)
 {
-    io::Bytes::Ptr dockey = this->make_dockey(docid);
-    uint64_t docnum = this->get_doc_num(dockey);
+    io::Bytes::Ptr dockey = this->store->make_key("docid", docid);
+    uint64_t docnum = this->get_docid_num(dockey);
     geo::Bounds::Vector bounds;
-
-    docnum = this->get_doc_num(dockey);
 
     for(io::Bytes::VIter vi = wkbs.begin(); vi != wkbs.end(); vi++) {
         geo::Bounds::Ptr b = this->geo_util->get_bounds(*vi, this->dimensions);
@@ -150,7 +146,7 @@ Index::update(io::Bytes::Ptr docid, io::Bytes::Vector wkbs)
 void
 Index::remove(io::Bytes::Ptr docid)
 {
-    io::Bytes::Ptr dockey = this->make_dockey(docid);
+    io::Bytes::Ptr dockey = this->store->make_key("docid", docid);
     io::Bytes::Ptr val = this->get_kv(dockey);
     geo::Bounds::Vector bounds;
     uint64_t docnum = this->read_id_value(val, bounds);
@@ -203,18 +199,16 @@ Index::query(geo::Bounds::Ptr query, bool nearest)
 void
 Index::init_storage()
 {
-    io::Bytes::Ptr key = io::Bytes::proxy(DOC_ID_NUM_KEY);
-    io::Bytes::Ptr val;
-
-    this->store = io::Storage::create(this->base_dir);
-    val = this->store->get_kv(key);
+    this->store = io::Storage::create(this->db_dir);
+    this->docid_num_key = this->store->make_key("meta", "docid_num");
+    io::Bytes::Ptr val = this->store->get_kv(this->docid_num_key);
 
     if(!val) {
-        this->doc_id_num = 0;
+        this->docid_num = 0;
     } else {
         io::Reader::Ptr reader = io::Reader::create(val);
 
-        if(!reader->read(this->doc_id_num)) {
+        if(!reader->read(this->docid_num)) {
             throw EastonException("Error reading document id number.");
         }
     }
@@ -233,16 +227,18 @@ Index::init_geo_idx(int argc, const char* argv[])
 
     this->dimensions = dims;
 
-    if(IndexProperty_SetFileName(props, this->geo_file.c_str()) != RT_None) {
-        throw EastonException("Error setting geo index filename.");
-    }
-
-    if(IndexProperty_SetIndexStorage(props, RT_Disk) != RT_None) {
+    if(IndexProperty_SetIndexStorage(props, RT_Custom) != RT_None) {
         throw EastonException("Error setting index storage type.");
     }
 
-    if(IndexProperty_SetOverwrite(props, 0) != RT_None) {
-        throw EastonException("Error setting overwrite property.");
+    uint32_t sism_sz = sizeof(SpatialIndexStorageManager);
+    if(IndexProperty_SetCustomStorageCallbacksSize(props, sism_sz) != RT_None) {
+        throw EastonException("Error setting storage callbacks size.");
+    }
+
+    void* sism = this->store->get_storage_manager();
+    if(IndexProperty_SetCustomStorageCallbacks(props, sism) != RT_None) {
+        throw EastonException("Error setting storage callbacks.");
     }
 
     if(idx_type == EASTON_INDEX_TYPE_RTREE) {
@@ -305,26 +301,14 @@ Index::init_geo_idx(int argc, const char* argv[])
 }
 
 
-io::Bytes::Ptr
-Index::make_dockey(io::Bytes::Ptr docid)
-{
-    // Dirty. I need to make the io::Bytes API moar better.
-    const char* prefix = "docid:";
-    io::Bytes::Ptr ret = io::Bytes::create(docid->size() + strlen(prefix));
-    memcpy(ret->get(), prefix, strlen(prefix));
-    memcpy(ret->get() + strlen(prefix), docid->get(), docid->size());
-    return ret;
-}
-
-
 uint64_t
-Index::get_doc_num(io::Bytes::Ptr dockey)
+Index::get_docid_num(io::Bytes::Ptr docid_key)
 {
-    io::Bytes::Ptr val = this->get_kv(dockey);
+    io::Bytes::Ptr val = this->get_kv(docid_key);
     uint64_t ret;
 
     if(!val) {
-        ret = this->doc_id_num++;
+        ret = this->docid_num++;
     } else {
         io::Reader::Ptr reader = io::Reader::create(val);
         if(!reader->read(ret)) {
@@ -335,10 +319,8 @@ Index::get_doc_num(io::Bytes::Ptr dockey)
     // Store the new current doc id number in the index
     io::Writer::Ptr writer = io::Writer::create();
     writer->write(ret);
-
-    io::Bytes::Ptr key = io::Bytes::proxy(DOC_ID_NUM_KEY);
     val = writer->serialize();
-    this->put_kv(key, val);
+    this->put_kv(this->docid_num_key, val);
 
     return ret;
 }

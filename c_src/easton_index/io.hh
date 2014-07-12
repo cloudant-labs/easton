@@ -2,11 +2,17 @@
 #ifndef EASTON_IO_HH
 #define EASTON_IO_HH
 
+#include <leveldb/db.h>
+#include <spatialindex/capi/sidx_api.h>
+#include <spatialindex/capi/CustomStorage.h>
 
 #include "ei.h"
 
 #include "easton.hh"
-#include <leveldb/db.h>
+
+
+typedef struct SpatialIndex::StorageManager::CustomStorageManagerCallbacks
+            SpatialIndexStorageManager;
 
 
 NS_EASTON_BEGIN
@@ -28,7 +34,7 @@ class Bytes
         static Ptr create(uint8_t* data, uint32_t len);
 
         // Create objects by copying the provided memory
-        static Ptr copy(uint8_t* data, uint32_t len);
+        static Ptr copy(const uint8_t* const data, uint32_t len);
 
         // Create objects that only proxy to the underlying memory
         static Ptr proxy(const char* data);
@@ -63,6 +69,7 @@ class Reader
         ~Reader();
 
         bool read(bool& val);
+        bool read(int64_t& val);
         bool read(uint64_t& val);
         bool read(double& val);
 
@@ -102,6 +109,7 @@ class Writer
 
         void write(bool val);
         void write(const char* val);
+        void write(int64_t val);
         void write(uint64_t val);
         void write(double val);
         void write(Bytes::Ptr val);
@@ -126,9 +134,15 @@ class Storage
         static Ptr create(std::string dirname);
         ~Storage();
 
+        io::Bytes::Ptr make_key(const char* tag, const char* val);
+        io::Bytes::Ptr make_key(const char* tag, io::Bytes::Ptr val);
+
         void put_kv(Bytes::Ptr key, Bytes::Ptr val);
         Bytes::Ptr get_kv(Bytes::Ptr key);
         void del_kv(Bytes::Ptr key);
+
+        void* get_storage_manager();
+        int64_t new_geoid();
 
     private:
         Storage();
@@ -140,6 +154,10 @@ class Storage
         leveldb::Options o_opts;
         leveldb::ReadOptions r_opts;
         leveldb::WriteOptions w_opts;
+
+        Bytes::Ptr geoid_num_key;
+        int64_t geoid_num;
+        SpatialIndexStorageManager sm;
 };
 
 
