@@ -1,4 +1,4 @@
--module(easton_02_index_kv_tests).
+-module(easton_02_kv_tests).
 
 -include_lib("eunit/include/eunit.hrl").
 
