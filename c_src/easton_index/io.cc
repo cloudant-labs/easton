@@ -143,7 +143,7 @@ Bytes::proxy(uint8_t* data, uint32_t len)
 
 Bytes::Bytes(uint32_t len)
 {
-    this->owner = false;
+    this->owner = true;
     this->data = new uint8_t[len];
     this->len = len;
 }
