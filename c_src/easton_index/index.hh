@@ -63,7 +63,7 @@ class Index
 
         io::Storage::Ptr store;
         IndexH geo_idx;
-        geo::Util::Ptr geo_util;
+        geo::Ctx::Ptr geo_ctx;
 
         io::Bytes::Ptr docid_num_key;
 

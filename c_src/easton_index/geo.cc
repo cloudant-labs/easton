@@ -66,6 +66,13 @@ Bounds::set_max(uint32_t dim, double val)
 }
 
 
+uint32_t
+Bounds::get_dims()
+{
+    return this->dims;
+}
+
+
 double*
 Bounds::mins()
 {
@@ -80,100 +87,148 @@ Bounds::maxs()
 }
 
 
-Util::Ptr
-Util::create()
+Geom::~Geom()
 {
-    return Util::Ptr(new Util());
 }
 
 
-Util::Util()
+int
+Geom::get_type()
 {
-    this->ctx = initGEOS_r(geos_notice, geos_error);
-    if(this->ctx == NULL) {
-        throw std::bad_alloc();
+    return GEOSGeomTypeId_r(this->ctx->ctx, this->ro_g);
+}
+
+
+bool
+Geom::is_valid()
+{
+    if(GEOSisValid_r(this->ctx->ctx, this->ro_g) == 1) {
+        return true;
+    }
+
+    return false;
+}
+
+
+bool
+Geom::is_empty()
+{
+    if(GEOSisEmpty_r(this->ctx->ctx, this->ro_g) == 1) {
+        return true;
+    }
+
+    return false;
+}
+
+
+bool
+Geom::is_ring()
+{
+    if(GEOSisRing_r(this->ctx->ctx, this->ro_g)) {
+        return true;
+    }
+
+    return false;
+}
+
+
+bool
+Geom::is_closed()
+{
+    if(GEOSisClosed_r(this->ctx->ctx, this->ro_g)) {
+        return true;
+    }
+
+    return false;
+}
+
+
+bool
+Geom::has_z()
+{
+    if(GEOSHasZ_r(this->ctx->ctx, this->ro_g)) {
+        return true;
+    }
+
+    return false;
+}
+
+
+Geom::Ptr
+Geom::get_envelope()
+{
+    GEOSGeometry* raw_env = GEOSEnvelope_r(this->ctx->ctx, this->ro_g);
+    Geom::Ptr env = this->ctx->wrap(raw_env);
+
+    if(!env) {
+        return NULL;
+    }
+
+    if(env->is_empty()) {
+        return NULL;
+    }
+
+    switch(env->get_type()) {
+        case GEOS_POINT:
+            return env;
+        case GEOS_POLYGON:
+            return env;
+        default:
+            return NULL;
     }
 }
 
 
-Util::~Util()
+Geom::Ptr
+Geom::get_exterior_ring()
 {
-    finishGEOS_r(this->ctx);
+    return this->ctx->wrap(GEOSGetExteriorRing_r(this->ctx->ctx, this->ro_g));
 }
 
 
 Bounds::Ptr
-Util::get_bounds(io::Bytes::Ptr wkb, uint32_t dimensions)
+Geom::get_bounds()
 {
-    GEOSGeometry* geom = NULL;
-	GEOSGeometry* env = NULL;
-	const GEOSGeometry* ring;
-	const GEOSCoordSequence* coords = NULL;
-    int type;
-    uint32_t ncoords;
-    uint32_t dims;
-    double v;
-    Bounds::Ptr ret;
-
-    geom = this->from_wkb(wkb);
-    if(geom == NULL) {
-        goto done;
+    Geom::Ptr env = this->get_envelope();
+    if(!env) {
+        return NULL;
     }
 
-    if(GEOSisValid_r(this->ctx, geom) != 1) {
-        goto done;
-    }
+    // We have to be careful with ring here to make
+    // sure it stays alive as long as we have a
+    // handle to its coordinate sequence.
+    Geom::Ptr ring;
+    const GEOSCoordSequence* coords;
 
-    env = GEOSEnvelope_r(this->ctx, geom);
-    if(env == NULL) {
-        goto done;
-    }
-
-    type = GEOSGeomTypeId_r(this->ctx, env);
-
-    switch(type) {
+    switch(env->get_type()) {
         case GEOS_POINT:
-            coords = GEOSGeom_getCoordSeq_r(this->ctx, env);
-            ncoords = 1;
+            coords = GEOSGeom_getCoordSeq_r(this->ctx->ctx, env->ro_g);
             break;
         case GEOS_POLYGON:
-            // To get a coordinate sequence we need a simple
-            // line which we can get by just requesting the
-            // outside of the envelope. For this case its a
-            // bit simple but Polygons could technically have
-            // holes even though we should have a rectangle
-            // here.
-            ring = GEOSGetExteriorRing_r(this->ctx, env);
-            coords = GEOSGeom_getCoordSeq_r(this->ctx, ring);
-            ncoords = (uint32_t) GEOSGetNumCoordinates(ring);
+            ring = env->get_exterior_ring();
+            coords = ring->get_coords();
             break;
         default:
-            // By my reading the envelope is guaranteed to
-            // be a point, polygon, or empty. Theoretically
-            // empty should've been filtered out above so it
-            // should be Point or Polygon here. Regardless
-            // I'm not sure enough to assert on it.
-            goto done;
+            throw EastonException("Invalid envelope type in get_bounds.");
     }
 
-    // Do some sanity checking on our dimensionality
-    if(!GEOSCoordSeq_getDimensions_r(this->ctx, coords, &dims)) {
-        goto done;
+    uint32_t ncoords = (uint32_t) GEOSGetNumCoordinates_r(
+            this->ctx->ctx, ring->ro_g);
+
+    uint32_t dims;
+    if(!GEOSCoordSeq_getDimensions_r(this->ctx->ctx, coords, &dims)) {
+        return NULL;
     }
 
-    if(dims != dimensions) {
-        goto done;
-    }
-
-    ret = Bounds::create(dims);
+    Bounds::Ptr ret = Bounds::create(dims);
 
     // Initialize our bounds based on the first
     // point in the sequence. This allows us to avoid
     // having to use sentinel values.
+    double v;
     for(uint32_t j = 0; j < dims; j++) {
-        if(!GEOSCoordSeq_getOrdinate_r(this->ctx, coords, 0, j, &v)) {
-            ret.reset();
-            goto done;
+        if(!GEOSCoordSeq_getOrdinate_r(this->ctx->ctx, coords, 0, j, &v)) {
+            return NULL;
         }
 
         ret->set_min(j, v);
@@ -184,9 +239,8 @@ Util::get_bounds(io::Bytes::Ptr wkb, uint32_t dimensions)
     // coordinate here.
     for(uint32_t i = 1; i < ncoords; i++) {
         for(uint32_t j = 0; j < dims; j++) {
-            if(!GEOSCoordSeq_getOrdinate_r(this->ctx, coords, i, j, &v)) {
-                ret.reset();
-                goto done;
+            if(!GEOSCoordSeq_getOrdinate_r(this->ctx->ctx, coords, i, j, &v)) {
+                return NULL;
             }
 
             ret->set_min(j, v);
@@ -194,29 +248,79 @@ Util::get_bounds(io::Bytes::Ptr wkb, uint32_t dimensions)
         }
     }
 
-done:
-    if(geom != NULL) {
-        GEOSGeom_destroy_r(this->ctx, geom);
-    }
-
-    if(env != NULL) {
-        GEOSGeom_destroy_r(this->ctx, env);
-    }
-
-    // From my understanding ring and coords
-    // are just borrowed references so we must
-    // not free them.
-
-    if(!ret) {
-        throw EastonException("Unable to get bounds for shape.");
-    }
-
     return ret;
 }
 
 
-GEOSGeometry*
-Util::from_wkb(io::Bytes::Ptr wkb)
+const GEOSCoordSequence*
+Geom::get_coords()
+{
+    return GEOSGeom_getCoordSeq_r(this->ctx->ctx, this->ro_g);
+}
+
+
+GeomRO::GeomRO(Ctx::Ptr ctx, const GEOSGeometry* ro_g)
+{
+    this->ctx = ctx;
+    this->ro_g = ro_g;
+}
+
+
+GeomRO::~GeomRO()
+{
+    // Don't attempt to delete the const ro_g pointer
+    // as that's libgeos's flag for read-only.
+}
+
+
+GeomRW::GeomRW(Ctx::Ptr ctx, GEOSGeometry* rw_g)
+{
+    this->ctx = ctx;
+    this->rw_g = rw_g;
+
+    // Set ro_g so that all our derived functions will
+    // operate on this instance.
+    this->ro_g = ro_g;
+}
+
+
+GeomRW::~GeomRW()
+{
+    this->ctx->destroy(this->rw_g);
+}
+
+
+void
+GeomRW::reproject(int src_srid, int tgt_srid)
+{
+
+}
+
+
+Ctx::Ptr
+Ctx::create()
+{
+    return Ptr(new Ctx());
+}
+
+
+Ctx::Ctx()
+{
+    this->ctx = initGEOS_r(geos_notice, geos_error);
+    if(this->ctx == NULL) {
+        throw std::bad_alloc();
+    }
+}
+
+
+Ctx::~Ctx()
+{
+    finishGEOS_r(this->ctx);
+}
+
+
+Geom::Ptr
+Ctx::from_wkb(io::Bytes::Ptr wkb)
 {
     GEOSWKBReader* reader;
     GEOSGeometry* geom;
@@ -230,8 +334,38 @@ Util::from_wkb(io::Bytes::Ptr wkb)
 
     GEOSWKBReader_destroy_r(this->ctx, reader);
 
-    return geom;
+    return this->wrap(geom);
 }
+
+
+GeomRO::Ptr
+Ctx::wrap(const GEOSGeometry* g)
+{
+    if(!g) {
+        return NULL;
+    }
+
+    return GeomRO::Ptr(new GeomRO(this->shared_from_this(), g));
+}
+
+
+GeomRW::Ptr
+Ctx::wrap(GEOSGeometry* g)
+{
+    if(!g) {
+        return NULL;
+    }
+
+    return GeomRW::Ptr(new GeomRW(this->shared_from_this(), g));
+}
+
+
+void
+Ctx::destroy(GEOSGeometry* g)
+{
+    GEOSGeom_destroy_r(this->ctx, g);
+}
+
 
 /*
 char

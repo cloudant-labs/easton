@@ -30,7 +30,7 @@ Index::Index(int argc, const char* argv[])
     this->init_storage();
     this->init_geo_idx(argc, argv);
 
-    this->geo_util = geo::Util::create();
+    this->geo_ctx = geo::Ctx::create();
 }
 
 
@@ -127,7 +127,11 @@ Index::update(io::Bytes::Ptr docid, io::Bytes::Vector wkbs)
     geo::Bounds::Vector bounds;
 
     for(io::Bytes::VIter vi = wkbs.begin(); vi != wkbs.end(); vi++) {
-        geo::Bounds::Ptr b = this->geo_util->get_bounds(*vi, this->dimensions);
+        geo::Geom::Ptr geom = this->geo_ctx->from_wkb(*vi);
+        geo::Bounds::Ptr b = geom->get_bounds();
+        if(b->get_dims() != this->dimensions) {
+            throw EastonException("Attempted to index mismatched dimensions.");
+        }
         bounds.push_back(b);
     }
 

@@ -2,6 +2,7 @@
 #ifndef EASTON_GEOM_HH
 #define EASTON_GEOM_HH
 
+
 // Prevent the misuse of non thread-safe GEOS functions
 #define GEOS_USE_ONLY_R_API
 
@@ -19,6 +20,12 @@ NS_EASTON_BEGIN
 NS_EASTON_GEO_BEGIN
 
 
+class Ctx;
+class Geom;
+class GeomRO;
+class GeomRW;
+
+
 class Bounds
 {
     public:
@@ -33,6 +40,8 @@ class Bounds
         void set_min(uint32_t dim, double val);
         void set_max(uint32_t dim, double val);
 
+        uint32_t get_dims();
+
         double* mins();
         double* maxs();
 
@@ -46,24 +55,96 @@ class Bounds
 };
 
 
-class Util
+class Geom
 {
     public:
-        typedef std::shared_ptr<Util> Ptr;
+        typedef std::shared_ptr<Geom> Ptr;
 
-        static Ptr create();
-        ~Util();
+        virtual ~Geom() = 0;
 
-        Bounds::Ptr get_bounds(io::Bytes::Ptr wkb, uint32_t dimensions);
-        bool filter(uint8_t filter, io::Bytes::Ptr wkb);
+        int get_type();
+
+        bool is_valid();
+        bool is_empty();
+        bool is_ring();
+        bool is_closed();
+        bool has_z();
+
+        Ptr get_envelope();
+        Ptr get_exterior_ring();
+
+        Bounds::Ptr get_bounds();
+
+        const GEOSCoordSequence* get_coords();
+
+    protected:
+        std::shared_ptr<Ctx> ctx;
+        const GEOSGeometry* ro_g;
+
+        friend class Ctx;
+};
+
+
+class GeomRO: public Geom
+{
+    public:
+        typedef std::shared_ptr<GeomRO> Ptr;
+
+        virtual ~GeomRO();
 
     private:
-        Util();
-        Util(const Util& other);
+        GeomRO();
+        GeomRO(std::shared_ptr<Ctx> ctx, const GEOSGeometry* g);
+        GeomRO(const GeomRO& other);
 
-        GEOSGeometry* from_wkb(io::Bytes::Ptr wkb);
+        friend class Ctx;
+};
+
+
+class GeomRW: public Geom
+{
+    public:
+        typedef std::shared_ptr<GeomRW> Ptr;
+
+        virtual ~GeomRW();
+
+        void reproject(int src_srid, int tgt_srid);
+
+    private:
+        GeomRW();
+        GeomRW(std::shared_ptr<Ctx> ctx, GEOSGeometry* g);
+        GeomRW(const GeomRW& other);
+
+        GEOSGeometry* rw_g;
+
+        friend class Ctx;
+};
+
+
+class Ctx: public std::enable_shared_from_this<Ctx>
+{
+    public:
+        typedef std::shared_ptr<Ctx> Ptr;
+
+        static Ptr create();
+        ~Ctx();
+
+        Geom::Ptr from_wkb(io::Bytes::Ptr wkb);
+
+    private:
+        Ctx();
+        Ctx(const Ctx& other);
+
+        GeomRO::Ptr wrap(const GEOSGeometry* g);
+        GeomRW::Ptr wrap(GEOSGeometry* g);
+
+        void destroy(GEOSGeometry* g);
 
         GEOSContextHandle_t ctx;
+
+        friend class Geom;
+        friend class GeomRO;
+        friend class GeomRW;
 };
 
 
