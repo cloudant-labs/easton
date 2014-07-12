@@ -25,6 +25,7 @@ class Bounds
         typedef std::shared_ptr<Bounds> Ptr;
         typedef std::vector<Ptr> Vector;
         typedef std::vector<Ptr>::iterator VIter;
+        typedef std::unique_ptr<double[]> DimsPtr;
 
         static Ptr create(uint32_t dims);
         ~Bounds();
@@ -40,7 +41,7 @@ class Bounds
         Bounds(uint32_t dims);
         Bounds(const Bounds& other);
 
-        double* data;
+        DimsPtr data;
         uint32_t dims;
 };
 

@@ -101,6 +101,7 @@ class Writer
 {
     public:
         typedef std::shared_ptr<Writer> Ptr;
+        typedef std::unique_ptr<ei_x_buff> EIXBuffPtr;
 
         static Ptr create();
         ~Writer();
@@ -123,7 +124,7 @@ class Writer
         Writer();
         Writer(const Writer& other);
 
-        ei_x_buff* buff;
+        EIXBuffPtr buff;
 };
 
 
@@ -176,7 +177,7 @@ class Transaction
 {
     public:
         typedef std::shared_ptr<Transaction> Ptr;
-        typedef std::shared_ptr<leveldb::WriteBatch> WBPtr;
+        typedef std::unique_ptr<leveldb::WriteBatch> WBPtr;
 
         static Ptr open(Storage::Ptr store);
         static Ptr autocommit(Storage::Ptr store);

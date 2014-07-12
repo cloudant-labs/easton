@@ -388,8 +388,8 @@ Writer::create()
 
 Writer::Writer()
 {
-    this->buff = new ei_x_buff;
-    if(ei_x_new_with_version(buff) != 0) {
+    this->buff = EIXBuffPtr(new ei_x_buff);
+    if(ei_x_new_with_version(this->buff.get()) != 0) {
         throw EastonException("Error initializing Writer buffer.");
     }
 }
@@ -397,11 +397,9 @@ Writer::Writer()
 
 Writer::~Writer()
 {
-    if(ei_x_free(this->buff) != 0) {
+    if(ei_x_free(this->buff.get()) != 0) {
         throw EastonException("Error destroying Writer buffer.");
     }
-
-    delete buff;
 }
 
 
@@ -441,7 +439,7 @@ Writer::serialize()
 void
 Writer::write(bool val)
 {
-    if(ei_x_encode_boolean(this->buff, val) != 0) {
+    if(ei_x_encode_boolean(this->buff.get(), val) != 0) {
         throw EastonException("Unable to encode boolean value.");
     }
 }
@@ -450,7 +448,7 @@ Writer::write(bool val)
 void
 Writer::write(const char* val)
 {
-    if(ei_x_encode_atom(this->buff, val) != 0) {
+    if(ei_x_encode_atom(this->buff.get(), val) != 0) {
         throw EastonException("Unable to encode atom value.");
     }
 }
@@ -459,7 +457,7 @@ Writer::write(const char* val)
 void
 Writer::write(int64_t val)
 {
-    if(ei_x_encode_longlong(this->buff, val) != 0) {
+    if(ei_x_encode_longlong(this->buff.get(), val) != 0) {
         throw EastonException("Unable to encode int64_t value.");
     }
 }
@@ -468,7 +466,7 @@ Writer::write(int64_t val)
 void
 Writer::write(uint64_t val)
 {
-    if(ei_x_encode_ulonglong(this->buff, val) != 0) {
+    if(ei_x_encode_ulonglong(this->buff.get(), val) != 0) {
         throw EastonException("Unable to encode uint64_t value.");
     }
 }
@@ -477,7 +475,7 @@ Writer::write(uint64_t val)
 void
 Writer::write(double val)
 {
-    if(ei_x_encode_double(this->buff, val) != 0) {
+    if(ei_x_encode_double(this->buff.get(), val) != 0) {
         throw EastonException("Unable to encode double value.");
     }
 }
@@ -486,7 +484,7 @@ Writer::write(double val)
 void
 Writer::write(Bytes::Ptr val)
 {
-    if(ei_x_encode_binary(this->buff, val->get(), val->size()) != 0) {
+    if(ei_x_encode_binary(this->buff.get(), val->get(), val->size()) != 0) {
         throw EastonException("Unable to encode binary value.");
     }
 }
@@ -495,7 +493,7 @@ Writer::write(Bytes::Ptr val)
 void
 Writer::start_tuple(int32_t arity)
 {
-    if(ei_x_encode_tuple_header(this->buff, arity) != 0) {
+    if(ei_x_encode_tuple_header(this->buff.get(), arity) != 0) {
         throw EastonException("Unable to encode tuple header.");
     }
 }
@@ -504,7 +502,7 @@ Writer::start_tuple(int32_t arity)
 void
 Writer::start_list(int32_t arity)
 {
-    if(ei_x_encode_list_header(this->buff, arity) != 0) {
+    if(ei_x_encode_list_header(this->buff.get(), arity) != 0) {
         throw EastonException("Unable to encode list header.");
     }
 }
@@ -513,7 +511,7 @@ Writer::start_list(int32_t arity)
 void
 Writer::write_empty_list()
 {
-    if(!ei_x_encode_empty_list(this->buff)) {
+    if(!ei_x_encode_empty_list(this->buff.get())) {
         throw EastonException("Unable to encode empty list.");
     }
 }
@@ -716,8 +714,8 @@ Transaction::commit()
     // Copy and reset our batch before attempting
     // to commit. This way if the commit write fails
     // we can't retry the same write accidentally.
-    WBPtr b = this->batch;
-    this->batch.reset();
+    WBPtr b;
+    b.swap(this->batch);
     this->store->write(b.get());
 }
 

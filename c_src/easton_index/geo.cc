@@ -39,13 +39,12 @@ Bounds::Bounds(uint32_t dims)
     // Single array, mins in the first half,
     // maxs in the second.
 
-    this->data = new double[2 * this->dims];
+    this->data = DimsPtr(new double[2 * this->dims]);
 }
 
 
 Bounds::~Bounds()
 {
-    delete [] this->data;
 }
 
 
@@ -70,14 +69,14 @@ Bounds::set_max(uint32_t dim, double val)
 double*
 Bounds::mins()
 {
-    return this->data;
+    return this->data.get();
 }
 
 
 double*
 Bounds::maxs()
 {
-    return this->data + this->dims;
+    return this->data.get() + this->dims;
 }
 
 
