@@ -18,11 +18,11 @@ Index::create(int argc, const char* argv[])
 
 Index::Index(int argc, const char* argv[])
 {
-    if(argc < 4) {
+    if(argc < 3) {
         throw EastonException("Not enough arguments for index creation.");
     }
 
-    this->db_dir = argv[1];
+    this->db_dir = argv[0];
     if(!io::is_dir(this->db_dir)) {
         throw EastonException("Index directory does not exist.");
     }
@@ -228,8 +228,8 @@ Index::init_geo_idx(int argc, const char* argv[])
     io::Transaction::Ptr tx = io::Transaction::autocommit(this->store);
     IndexPropertyH props = IndexProperty_Create();
 
-    int64_t idx_type = atoi(argv[2]);
-    int64_t dims = atoi(argv[3]);
+    int64_t idx_type = atoi(argv[1]);
+    int64_t dims = atoi(argv[2]);
 
     RTIndexType it;
 

@@ -3,10 +3,17 @@
 -include_lib("eunit/include/eunit.hrl").
 
 
+idx_dir() -> "test/test_02".
+
+
 open_idx() ->
-    Files = filelib:wildcard("test/test02/*"),
-    lists:foreach(fun file:delete/1, Files),
-    {ok, Idx} = easton_index:open("test/test_02"),
+    case filelib:is_dir(idx_dir()) of
+        true ->
+            ok = easton_index:destroy(idx_dir());
+        false ->
+            ok
+    end,
+    {ok, Idx} = easton_index:open(idx_dir()),
     Idx.
 
 
@@ -34,59 +41,60 @@ basic_test_() ->
 
 
 put_one_(Idx) ->
-    ?_assertEqual(ok, easton_index:put(Idx, p, bar)).
+    [
+        ?_assertEqual(ok, easton_index:put(Idx, key, val))
+    ].
 
 
 put_put_(Idx) ->
     [
-        ?_assertEqual(ok, easton_index:put(Idx, pp, bar)),
-        ?_assertEqual(ok, easton_index:put(Idx, pp, baz))
+        ?_assertEqual(ok, easton_index:put(Idx, key, val)),
+        ?_assertEqual(ok, easton_index:put(Idx, key, val))
     ].
 
 
 get_missing_(Idx) ->
     [
-        ?_assertEqual(false, easton_index:get(Idx, not_a_key)),
-        ?_assertEqual(default, easton_index:get(Idx, not_a_key, default))
+        ?_assertEqual(false, easton_index:get(Idx, key)),
+        ?_assertEqual(default, easton_index:get(Idx, key, default))
     ].
 
 
 del_missing_(Idx) ->
     [
-        ?_assertEqual(ok, easton_index:del(Idx, not_a_key))
+        ?_assertEqual(ok, easton_index:del(Idx, key))
     ].
 
 
 put_get_(Idx) ->
     [
-        ?_assertEqual(ok, easton_index:put(Idx, pg, ohai)),
-        ?_assertEqual({pg, ohai}, easton_index:get(Idx, pg)),
-        ?_assertEqual(ohai, easton_index:get(Idx, pg, undefined))
+        ?_assertEqual(ok, easton_index:put(Idx, key, val)),
+        ?_assertEqual({key, val}, easton_index:get(Idx, key)),
+        ?_assertEqual(val, easton_index:get(Idx, key, key))
     ].
 
 
 put_get_put_get_(Idx) ->
     [
-        ?_assertEqual(ok, easton_index:put(Idx, pgpg, v1)),
-        ?_assertEqual({pgpg, v1}, easton_index:get(Idx, pgpg)),
-        ?_assertEqual(v1, easton_index:get(Idx, pgpg, undefined)),
-        ?_assertEqual(ok, easton_index:put(Idx, pgpg, v2)),
-        ?_assertEqual({pgpg, v2}, easton_index:get(Idx, pgpg))
+        ?_assertEqual(ok, easton_index:put(Idx, key, val1)),
+        ?_assertEqual({key, val1}, easton_index:get(Idx, key)),
+        ?_assertEqual(val1, easton_index:get(Idx, key, undefined)),
+        ?_assertEqual(ok, easton_index:put(Idx, key, val2)),
+        ?_assertEqual({key, val2}, easton_index:get(Idx, key))
     ].
 
 
 put_del_get_(Idx) ->
     [
-        ?_assertEqual(ok, easton_index:put(Idx, pdg, thing)),
-        ?_assertEqual(ok, easton_index:del(Idx, pdg)),
-        ?_assertEqual(false, easton_index:get(Idx, pdg))
+        ?_assertEqual(ok, easton_index:put(Idx, key, val)),
+        ?_assertEqual(ok, easton_index:del(Idx, key)),
+        ?_assertEqual(false, easton_index:get(Idx, val))
     ].
 
 
 put_get_del_(Idx) ->
     [
-        ?_assertEqual(ok, easton_index:put(Idx, pgd, newthing)),
-        ?_assertEqual({pgd, newthing}, easton_index:get(Idx, pgd)),
-        ?_assertEqual(ok, easton_index:del(Idx, pgd))
+        ?_assertEqual(ok, easton_index:put(Idx, key, val)),
+        ?_assertEqual({key, val}, easton_index:get(Idx, key)),
+        ?_assertEqual(ok, easton_index:del(Idx, key))
     ].
-

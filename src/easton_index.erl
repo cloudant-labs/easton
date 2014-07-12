@@ -7,6 +7,9 @@
     close/1,
     sync/1,
 
+    destroy/1,
+    destroy/2,
+
     put/3,
     get/2,
     get/3,
@@ -61,7 +64,7 @@ open(Directory, Opts) ->
     IndexType = get_index_type(Opts),
     Dimensions = get_index_dimensions(Opts),
     Limit = get_limit(Opts),
-    Args = {args, [Directory, IndexType, Dimensions, Limit]},
+    Args = {args, ["run", Directory, IndexType, Dimensions, Limit]},
 
     CsMapDir = get_cs_map_dir(Opts),
     Env = {env, [{"EASTON_CS_MAP_DIR", CsMapDir}]},
@@ -92,6 +95,34 @@ sync(Index) ->
             ok;
         Else ->
             throw(Else)
+    end.
+
+
+destroy(Directory) ->
+    destroy(Directory, []).
+
+
+destroy(Directory, Opts) ->
+    case filelib:is_dir(Directory) of
+        true ->
+            ok;
+        false ->
+            throw({invalid_index, Directory})
+    end,
+
+    CsMapDir = get_cs_map_dir(Opts),
+    Args = {args, ["destroy", Directory]},
+    Env = {env, [{"EASTON_CS_MAP_DIR", CsMapDir}]},
+
+    {ok, Port, OsPid} = open_index([Args, Env]),
+    erlang:spawn(?MODULE, kill_monitor, [self(), OsPid]),
+    receive
+        {Port, {exit_status, 0}} ->
+            ok;
+        {Port, Else} ->
+            throw(Else)
+        after 5000 ->
+            throw(timeout)
     end.
 
 
