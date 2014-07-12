@@ -280,7 +280,7 @@ GeomRW::GeomRW(Ctx::Ptr ctx, GEOSGeometry* rw_g)
 
     // Set ro_g so that all our derived functions will
     // operate on this instance.
-    this->ro_g = ro_g;
+    this->ro_g = rw_g;
 }
 
 
