@@ -24,6 +24,8 @@ class Ctx;
 class Geom;
 class GeomRO;
 class GeomRW;
+class PrepGeom;
+class GeomFilter;
 
 
 class Bounds
@@ -82,6 +84,7 @@ class Geom
         const GEOSGeometry* ro_g;
 
         friend class Ctx;
+        friend class PrepGeom;
 };
 
 
@@ -121,6 +124,54 @@ class GeomRW: public Geom
 };
 
 
+class PrepGeom
+{
+    public:
+        typedef std::shared_ptr<PrepGeom> Ptr;
+
+        ~PrepGeom();
+
+        bool contains(Geom::Ptr subj);
+        bool contains_properly(Geom::Ptr subj);
+        bool covered_by(Geom::Ptr subj);
+        bool covers(Geom::Ptr subj);
+        bool crosses(Geom::Ptr subj);
+        bool disjoint(Geom::Ptr subj);
+        bool intersects(Geom::Ptr subj);
+        bool overlaps(Geom::Ptr subj);
+        bool touches(Geom::Ptr subj);
+        bool within(Geom::Ptr subj);
+
+    private:
+        PrepGeom();
+        PrepGeom(std::shared_ptr<Ctx> ctx, Geom::Ptr base);
+        PrepGeom(const PrepGeom& other);
+
+        std::shared_ptr<Ctx> ctx;
+        Geom::Ptr base;
+        const GEOSPreparedGeometry* prep;
+
+        friend class Ctx;
+        friend class GeomFilter;
+};
+
+
+class GeomFilter
+{
+    public:
+        GeomFilter(std::shared_ptr<Ctx> ctx, Geom::Ptr g, uint64_t filter);
+        ~GeomFilter();
+
+        bool operator()(Geom::Ptr other);
+
+    private:
+        PrepGeom::Ptr pg;
+        uint64_t filter;
+
+        friend class Geom;
+};
+
+
 class Ctx: public std::enable_shared_from_this<Ctx>
 {
     public:
@@ -130,6 +181,7 @@ class Ctx: public std::enable_shared_from_this<Ctx>
         ~Ctx();
 
         Geom::Ptr from_wkb(io::Bytes::Ptr wkb);
+        GeomFilter make_filter(Geom::Ptr geom, uint64_t filter);
 
     private:
         Ctx();
@@ -145,6 +197,7 @@ class Ctx: public std::enable_shared_from_this<Ctx>
         friend class Geom;
         friend class GeomRO;
         friend class GeomRW;
+        friend class PrepGeom;
 };
 
 

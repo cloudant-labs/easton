@@ -297,6 +297,184 @@ GeomRW::reproject(int src_srid, int tgt_srid)
 }
 
 
+PrepGeom::PrepGeom(Ctx::Ptr ctx, Geom::Ptr base)
+{
+    this->ctx = ctx;
+    this->base = base;
+    this->prep = GEOSPrepare_r(this->ctx->ctx, base->ro_g);
+    if(!prep) {
+        throw std::bad_alloc();
+    }
+}
+
+
+PrepGeom::~PrepGeom()
+{
+    GEOSPreparedGeom_destroy_r(this->ctx->ctx, this->prep);
+}
+
+
+bool
+PrepGeom::contains(Geom::Ptr subj)
+{
+    if(GEOSPreparedContains_r(this->ctx->ctx, this->prep, subj->ro_g) == 1) {
+        return true;
+    }
+
+    return false;
+}
+
+
+bool
+PrepGeom::contains_properly(Geom::Ptr subj)
+{
+    if(GEOSPreparedContainsProperly_r(
+            this->ctx->ctx, this->prep, subj->ro_g) == 1) {
+        return true;
+    }
+
+    return false;
+}
+
+
+bool
+PrepGeom::covered_by(Geom::Ptr subj)
+{
+    if(GEOSPreparedCovers_r(this->ctx->ctx, this->prep, subj->ro_g) == 1) {
+        return true;
+    }
+
+    return false;
+}
+
+
+bool
+PrepGeom::covers(Geom::Ptr subj)
+{
+    if(GEOSPreparedCovers_r(this->ctx->ctx, this->prep, subj->ro_g) == 1) {
+        return true;
+    }
+
+    return false;
+}
+
+
+bool
+PrepGeom::crosses(Geom::Ptr subj)
+{
+    if(GEOSPreparedCrosses_r(this->ctx->ctx, this->prep, subj->ro_g) == 1) {
+        return true;
+    }
+
+    return false;
+}
+
+
+bool
+PrepGeom::disjoint(Geom::Ptr subj)
+{
+    if(GEOSPreparedDisjoint_r(this->ctx->ctx, this->prep, subj->ro_g) == 1) {
+        return true;
+    }
+
+    return false;
+}
+
+
+bool
+PrepGeom::intersects(Geom::Ptr subj)
+{
+    if(GEOSPreparedIntersects_r(this->ctx->ctx, this->prep, subj->ro_g) == 1) {
+        return true;
+    }
+
+    return false;
+}
+
+
+bool
+PrepGeom::overlaps(Geom::Ptr subj)
+{
+    if(GEOSPreparedOverlaps_r(this->ctx->ctx, this->prep, subj->ro_g) == 1) {
+        return true;
+    }
+
+    return false;
+}
+
+
+bool
+PrepGeom::touches(Geom::Ptr subj)
+{
+    if(GEOSPreparedTouches_r(this->ctx->ctx, this->prep, subj->ro_g) == 1) {
+        return true;
+    }
+
+    return false;
+}
+
+
+bool
+PrepGeom::within(Geom::Ptr subj)
+{
+    if(GEOSPreparedWithin_r(this->ctx->ctx, this->prep, subj->ro_g) == 1) {
+        return true;
+    }
+
+    return false;
+}
+
+
+GeomFilter::GeomFilter(Ctx::Ptr ctx, Geom::Ptr g, uint64_t filter)
+{
+    this->pg = PrepGeom::Ptr(new PrepGeom(ctx, g));
+    this->filter = filter;
+}
+
+
+GeomFilter::~GeomFilter()
+{
+}
+
+
+bool
+GeomFilter::operator()(Geom::Ptr other)
+{
+    // Theoretically I could do this with a function pointer
+    // instead of running the switch for each invocation. I
+    // tried it. It was a lot more complicated than I wanted
+    // so I reverted to the this more straightforward method
+    // in the interest of not making non-C++ reviewers' eyes
+    // bleed.
+    switch(this->filter) {
+        case EASTON_FILTER_NONE:
+            return true;
+        case EASTON_FILTER_CONTAINS:
+            return this->pg->contains(other);
+        case EASTON_FILTER_CONTAINS_PROPERLY:
+            return this->pg->contains_properly(other);
+        case EASTON_FILTER_COVERED_BY:
+            return this->pg->covered_by(other);
+        case EASTON_FILTER_COVERS:
+            return this->pg->covers(other);
+        case EASTON_FILTER_CROSSES:
+            return this->pg->crosses(other);
+        case EASTON_FILTER_DISJOINT:
+            return this->pg->disjoint(other);
+        case EASTON_FILTER_INTERSECTS:
+            return this->pg->intersects(other);
+        case EASTON_FILTER_OVERLAPS:
+            return this->pg->overlaps(other);
+        case EASTON_FILTER_TOUCHES:
+            return this->pg->touches(other);
+        case EASTON_FILTER_WITHIN:
+            return this->pg->within(other);
+        default:
+            throw EastonException("Invalid filter function requested.");
+    }
+}
+
+
 Ctx::Ptr
 Ctx::create()
 {
@@ -338,6 +516,13 @@ Ctx::from_wkb(io::Bytes::Ptr wkb)
 }
 
 
+GeomFilter
+Ctx::make_filter(Geom::Ptr geom, uint64_t filter)
+{
+    return GeomFilter(this->shared_from_this(), geom, filter);
+}
+
+
 GeomRO::Ptr
 Ctx::wrap(const GEOSGeometry* g)
 {
@@ -366,49 +551,6 @@ Ctx::destroy(GEOSGeometry* g)
     GEOSGeom_destroy_r(this->ctx, g);
 }
 
-
-/*
-char
-null_filter(GEOSContextHandle_t ctx,
-        const GEOSPreparedGeometry* pg, const GEOSGeometry* g)
-{
-    return 1;
-}
-
-
-easton_geom_filter_t*
-easton_gem_get_filter(uint8_t filter)
-{
-    easton_geom_filter_t* f = NULL;
-
-    switch(filter) {
-        case EASTON_FILTER_NONE:
-            return &null_filter;
-        case EASTON_FILTER_CONTAINS:
-            return &GEOSPreparedContains_r;
-        case EASTON_FILTER_CONTAINS_PROPERLY:
-            return &GEOSPreparedContainsProperly_r;
-        case EASTON_FILTER_COVERED_BY:
-            return &GEOSPreparedCoveredBy_r;
-        case EASTON_FILTER_COVERS:
-            return &GEOSPreparedCovers_r;
-        case EASTON_FILTER_CROSSES:
-            return &GEOSPreparedCrosses_r;
-        case EASTON_FILTER_DISJOINT:
-            return &GEOSPreparedDisjoint_r;
-        case EASTON_FILTER_INTERSECTS:
-            return &GEOSPreparedIntersects_r;
-        case EASTON_FILTER_OVERLAPS:
-            return &GEOSPreparedOverlaps_r;
-        case EASTON_FILTER_TOUCHES:
-            return &GEOSPreparedTouches_r;
-        case EASTON_FILTER_WITHIN:
-            return &GEOSPreparedWithin_r;
-        default:
-            return NULL;
-    }
-}
-*/
 
 NS_EASTON_GEO_END
 NS_EASTON_END

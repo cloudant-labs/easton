@@ -48,6 +48,13 @@ Index::sync()
 }
 
 
+geo::Ctx::Ptr
+Index::get_geo_ctx()
+{
+    return this->geo_ctx;
+}
+
+
 uint64_t
 Index::curr_docid_num()
 {

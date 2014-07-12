@@ -27,6 +27,8 @@ class Index
 
         void sync();
 
+        geo::Ctx::Ptr get_geo_ctx();
+
         uint64_t curr_docid_num();
         uint64_t doc_count();
 
