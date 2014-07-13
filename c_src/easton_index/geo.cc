@@ -200,20 +200,21 @@ Geom::get_bounds()
     Geom::Ptr ring;
     const GEOSCoordSequence* coords;
 
+    uint32_t ncoords;
     switch(env->get_type()) {
         case GEOS_POINT:
             coords = GEOSGeom_getCoordSeq_r(this->ctx->ctx, env->ro_g);
+            ncoords = 1;
             break;
         case GEOS_POLYGON:
             ring = env->get_exterior_ring();
+            ncoords = (uint32_t) GEOSGetNumCoordinates_r(
+                    this->ctx->ctx, ring->ro_g);
             coords = ring->get_coords();
             break;
         default:
             throw EastonException("Invalid envelope type in get_bounds.");
     }
-
-    uint32_t ncoords = (uint32_t) GEOSGetNumCoordinates_r(
-            this->ctx->ctx, ring->ro_g);
 
     uint32_t dims;
     if(!GEOSCoordSeq_getDimensions_r(this->ctx->ctx, coords, &dims)) {
