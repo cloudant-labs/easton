@@ -1,4 +1,4 @@
--module(easton_01_open_close_tests).
+-module(easton_02_open_close_tests).
 
 -include_lib("eunit/include/eunit.hrl").
 

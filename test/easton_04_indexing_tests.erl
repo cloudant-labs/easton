@@ -1,4 +1,4 @@
--module(easton_03_indexing_tests).
+-module(easton_04_indexing_tests).
 
 -include_lib("eunit/include/eunit.hrl").
 
@@ -182,6 +182,10 @@ shape_tests(Idx, Shape) ->
         ?_assertEqual(ok, easton_index:update(Idx, <<"foo">>, Shape)),
         ?_assertEqual({ok, 1}, easton_index:doc_id_num(Idx)),
         ?_assertEqual({ok, 1}, easton_index:doc_count(Idx)),
+        ?_assertEqual(
+            {ok, [{<<"foo">>, Shape}]},
+            easton_index:search(Idx, Shape)
+        ),
         ?_assertEqual(ok, easton_index:remove(Idx, <<"foo">>)),
         ?_assertEqual({ok, 1}, easton_index:doc_id_num(Idx)),
         ?_assertEqual({ok, 0}, easton_index:doc_count(Idx))
