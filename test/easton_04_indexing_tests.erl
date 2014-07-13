@@ -40,144 +40,39 @@ basic_test_() ->
 
 
 point_tests_(Idx) ->
-    Point = {[
-        {<<"type">>, <<"Point">>},
-        {<<"coordinates">>, [100.0, 0.0]}
-    ]},
-    {"Point", shape_tests(Idx, Point)}.
+    {"Point", shape_tests(Idx, point)}.
 
 
 linestring_tests_(Idx) ->
-    LineString = {[
-        {<<"type">>, <<"LineString">>},
-        {<<"coordinates">>, [
-            [100.0, 0.0], [101.0, 1.0]
-        ]}
-    ]},
-    {"LineString", shape_tests(Idx, LineString)}.
+    {"LineString", shape_tests(Idx, linestring)}.
 
 
 polygon_tests_(Idx) ->
-    Polygon = {[
-        {<<"type">>, <<"Polygon">>},
-        {<<"coordinates">>, [
-            % Outer ring
-            [
-                [100.0, 0.0],
-                [101.0, 0.0],
-                [101.0, 1.0],
-                [100.0, 1.0],
-                [100.0, 0.0]
-            ]
-        ]}
-    ]},
-    {"Polygon - Simple", shape_tests(Idx, Polygon)}.
+    {"Polygon - Simple", shape_tests(Idx, polygon)}.
 
 
 polygon_with_holes_tests_(Idx) ->
-    PolygonWithHoles = {[
-        {<<"type">>, <<"Polygon">>},
-        {<<"coordinates">>, [
-            % Outer ring
-            [
-                [100.0, 0.0],
-                [101.0, 0.0],
-                [101.0, 1.0],
-                [100.0, 1.0],
-                [100.0, 0.0]
-            ],
-            % Inner ring
-            [
-                [100.2, 0.2],
-                [100.8, 0.2],
-                [100.8, 0.8],
-                [100.2, 0.8],
-                [100.2, 0.2]
-            ]
-        ]}
-    ]},
-    {"Polygon - With Holes", shape_tests(Idx, PolygonWithHoles)}.
+    {"Polygon - With Hole", shape_tests(Idx, polygon_with_hole)}.
 
 
 multipoint_tests_(Idx) ->
-    MultiPoint = {[
-        {<<"type">>, <<"MultiPoint">>},
-        {<<"coordinates">>, [
-            [100.0, 0.0],
-            [101.0, 1.0]
-        ]}
-    ]},
-    {"MultiPoint", shape_tests(Idx, MultiPoint)}.
+    {"MultiPoint", shape_tests(Idx, multipoint)}.
 
 
 multilinestring_tests_(Idx) ->
-    MultiLineString = {[
-        {<<"type">>, <<"MultiLineString">>},
-        {<<"coordinates">>, [
-            [[100.0, 0.0], [101.0, 1.0]],
-            [[102.0, 2.0], [103.0, 3.0]]
-        ]}
-    ]},
-    {"MultiLineString", shape_tests(Idx, MultiLineString)}.
+    {"MultiLineString", shape_tests(Idx, multilinestring)}.
 
 
 multipolygon_tests_(Idx) ->
-    MultiPolygon = {[
-        {<<"type">>, <<"MultiPolygon">>},
-        {<<"coordinates">>, [
-            [
-                [
-                    [102.0, 2.0],
-                    [103.0, 2.0],
-                    [103.0, 3.0],
-                    [102.0, 3.0],
-                    [102.0, 2.0]
-                ]
-            ],
-            [
-                [
-                    [100.0, 0.0],
-                    [101.0, 0.0],
-                    [101.0, 1.0],
-                    [100.0, 1.0],
-                    [100.0, 0.0]
-                ],
-                [
-                    [100.2, 0.2],
-                    [100.8, 0.2],
-                    [100.8, 0.8],
-                    [100.2, 0.8],
-                    [100.2, 0.2]
-                ]
-            ]
-
-        ]}
-    ]},
-    {"MultiPolygon", shape_tests(Idx, MultiPolygon)}.
+    {"MultiPolygon", shape_tests(Idx, multipolygon)}.
 
 
 geometrycollection_tests_(Idx) ->
-    GeometryCollection = {[
-        {<<"type">>, <<"GeometryCollection">>},
-        {<<"geometries">>, [
-            {[
-                {<<"type">>, <<"Point">>},
-                {<<"coordinates">>, [100.0, 0.0]}
-            ]},
-            {[
-                {<<"type">>, <<"LineString">>},
-                {<<"coordinates">>, [
-                    [101.0, 0.0],
-                    [102.0, 1.0]
-                ]}
-            ]}
-        ]}
-    ]},
-    {"GeometryCollection", shape_tests(Idx, GeometryCollection)}.
+    {"GeometryCollection", shape_tests(Idx, geometrycollection)}.
 
 
-
-shape_tests(Idx, Shape) ->
+shape_tests(Idx, Name) ->
+    Shape = easton_shapes:Name(),
     [
         ?_assertEqual(ok, easton_index:update(Idx, <<"foo">>, Shape)),
         ?_assertEqual({ok, 1}, easton_index:doc_id_num(Idx)),
@@ -188,5 +83,6 @@ shape_tests(Idx, Shape) ->
         ),
         ?_assertEqual(ok, easton_index:remove(Idx, <<"foo">>)),
         ?_assertEqual({ok, 1}, easton_index:doc_id_num(Idx)),
-        ?_assertEqual({ok, 0}, easton_index:doc_count(Idx))
+        ?_assertEqual({ok, 0}, easton_index:doc_count(Idx)),
+        ?_assertEqual({ok, []}, easton_index:search(Idx, Shape))
     ].
