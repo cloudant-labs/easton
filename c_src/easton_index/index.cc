@@ -264,14 +264,13 @@ Index::init_geo_idx(int argc, const char* argv[])
         throw EastonException("Error setting geo index dimensions.");
     }
 
-    // Setting the limit and offset below to UINT64_MAX is so
-    // that we can do our own paging. Underneat the covers
-    // libspatialindex is loading all results into RAM and then
-    // has a post-processing step. Rather than futz around trying
-    // to page things propery we'll just disable its paging
-    // and use our own.
+    // Setting the ResultSetLimit to 0 disables paging in
+    // libspatialindex so that we can implement our own
+    // after the fact. Internally libspatialindex already
+    // loads the entire result set including false positives
+    // into RAM so this isn't any less efficient.
 
-    if(IndexProperty_SetResultSetLimit(props, UINT64_MAX) != RT_None) {
+    if(IndexProperty_SetResultSetLimit(props, 0) != RT_None) {
         throw EastonException("Error setting geo index result set limit.");
     }
 
@@ -283,8 +282,6 @@ Index::init_geo_idx(int argc, const char* argv[])
     if(!Index_IsValid(this->geo_idx)) {
         throw EastonException("Created an invalid geo index.");
     }
-
-    Index_SetResultSetOffset(this->geo_idx, UINT64_MAX);
 
     IndexProperty_Destroy(props);
 
