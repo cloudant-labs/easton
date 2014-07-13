@@ -51,6 +51,20 @@ Bounds::~Bounds()
 void
 Bounds::set_min(uint32_t dim, double val)
 {
+    this->data[dim] = val;
+}
+
+
+void
+Bounds::set_max(uint32_t dim, double val)
+{
+    this->data[this->dims + dim] = val;
+}
+
+
+void
+Bounds::update_min(uint32_t dim, double val)
+{
     if(val < this->data[dim]) {
         this->data[dim] = val;
     }
@@ -58,7 +72,7 @@ Bounds::set_min(uint32_t dim, double val)
 
 
 void
-Bounds::set_max(uint32_t dim, double val)
+Bounds::update_max(uint32_t dim, double val)
 {
     if(val > this->data[this->dims + dim]) {
         this->data[this->dims + dim] = val;
@@ -244,8 +258,8 @@ Geom::get_bounds()
                 return NULL;
             }
 
-            ret->set_min(j, v);
-            ret->set_max(j, v);
+            ret->update_min(j, v);
+            ret->update_max(j, v);
         }
     }
 

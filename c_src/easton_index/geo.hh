@@ -42,6 +42,9 @@ class Bounds
         void set_min(uint32_t dim, double val);
         void set_max(uint32_t dim, double val);
 
+        void update_min(uint32_t dim, double val);
+        void update_max(uint32_t dim, double val);
+
         uint32_t get_dims();
 
         double* mins();
