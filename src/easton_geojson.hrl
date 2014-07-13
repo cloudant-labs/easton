@@ -32,3 +32,4 @@
 
 -define(WKB_Z, 16#80000000).
 -define(WKB_M, 16#40000000).
+-define(WKB_TYPE_FILTER, 16#2FFFFFFF).
