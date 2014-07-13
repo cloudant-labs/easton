@@ -21,7 +21,7 @@ geos_notice(const char* fmt, ...) {
 
 static void
 geos_error(const char* fmt, ...) {
-    throw EastonExit(EASTON_ERROR_GEOS_EXCEPTION);
+    return;
 }
 
 
