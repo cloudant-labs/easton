@@ -307,6 +307,7 @@ query(easton::Index::Ptr idx, io::Reader::Ptr reader)
         writer->write(r.first);
         writer->write(r.second);
     }
+    writer->write_empty_list();
     return writer;
 }
 
