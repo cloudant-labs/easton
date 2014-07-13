@@ -77,7 +77,7 @@ int
 main(int argc, const char* argv[])
 {
     if(argc < 2) {
-        fprintf(stderr, "usage: %s action [args...]", argv[0]);
+        fprintf(stderr, "usage: %s action [args...]\r\n", argv[0]);
         exit(-1);
     }
 
