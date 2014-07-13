@@ -39,7 +39,7 @@ class Index
         void update(io::Bytes::Ptr docid, io::Bytes::Vector wkbs);
         void remove(io::Bytes::Ptr docid);
 
-        std::vector<Result> query(geo::Bounds::Ptr bounds, bool nearest);
+        std::vector<Result> search(geo::Bounds::Ptr bounds, bool nearest);
 
     private:
         Index();

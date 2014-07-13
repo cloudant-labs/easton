@@ -19,7 +19,9 @@
     doc_count/1,
 
     update/3,
-    remove/2
+    remove/2,
+    search/2,
+    search/3
 
     % search/3,
     % search/4
@@ -63,8 +65,7 @@ open(Directory, Opts) ->
 
     IndexType = get_index_type(Opts),
     Dimensions = get_index_dimensions(Opts),
-    Limit = get_limit(Opts),
-    Args = {args, ["run", Directory, IndexType, Dimensions, Limit]},
+    Args = {args, ["run", Directory, IndexType, Dimensions]},
 
     CsMapDir = get_cs_map_dir(Opts),
     Env = {env, [{"EASTON_CS_MAP_DIR", CsMapDir}]},
@@ -199,6 +200,27 @@ remove(Index, DocId) ->
     case cmd(Index, ?EASTON_COMMAND_REMOVE_ENTRIES, DocId) of
         ok ->
             ok;
+        Else ->
+            throw(Else)
+    end.
+
+
+search(Index, Geometry) ->
+    search(Index, Geometry, []).
+
+
+search(Index, Geometry, Opts) ->
+    WKB = easton_geojson:to_wkb(Geometry),
+    Filter = get_filter(Opts),
+    Nearest = get_nearest(Opts),
+    Limit = get_limit(Opts),
+    Offset = get_offset(Opts),
+    Arg = {WKB, Filter, Nearest, Limit, Offset},
+    case cmd(Index, ?EASTON_COMMAND_SEARCH, Arg) of
+        {ok, Results} ->
+            {ok, [
+                {Id, easton_geojson:from_wkb(WKB)} || {Id, WKB} <- Results
+            ]};
         Else ->
             throw(Else)
     end.
@@ -340,17 +362,6 @@ get_index_dimensions(Opts) ->
     end.
 
 
-get_limit(Opts) ->
-    case lists:keyfind(limit, 1, Opts) of
-        {_, N} when is_integer(N), N > 0 ->
-            integer_to_list(N);
-        {_, Else} ->
-            throw({invalid_index_limit, Else});
-        false ->
-            "200"
-    end.
-
-
 get_cs_map_dir(Opts) ->
     case lists:keyfind(cs_map_dir, 1, Opts) of
         {_, Path0} ->
@@ -364,6 +375,89 @@ get_cs_map_dir(Opts) ->
         false ->
             ?EASTON_DEFAULT_CS_MAP_DIR
     end.
+
+
+get_filter(Opts) ->
+    case lists:keyfind(filter, 1, Opts) of
+        {_, F} ->
+            filter(F);
+        false ->
+            ?EASTON_FILTER_NONE
+    end.
+
+
+get_nearest(Opts) ->
+    proplists:get_bool(nearest, Opts).
+
+
+get_limit(Opts) ->
+    case lists:keyfind(limit, 1, Opts) of
+        {_, N} when is_integer(N), N > 0 ->
+            N;
+        {_, Else} ->
+            throw({invalid_limit, Else});
+        false ->
+            200
+    end.
+
+
+get_offset(Opts) ->
+    case lists:keyfind(offset, 1, Opts) of
+        {_, N} when is_integer(N), N >= 0 ->
+            N;
+        {_, Else} ->
+            throw({invalid_offset, Else});
+        false ->
+            0
+    end.
+
+
+filter(none) ->
+    ?EASTON_FILTER_NONE;
+filter(<<"none">>) ->
+    ?EASTON_FILTER_NONE;
+filter(contains) ->
+    ?EASTON_FILTER_CONTAINS;
+filter(<<"contains">>) ->
+    ?EASTON_FILTER_CONTAINS;
+filter(contains_properly) ->
+    ?EASTON_FILTER_CONTAINS_PROPERLY;
+filter(<<"contains_properly">>) ->
+    ?EASTON_FILTER_CONTAINS_PROPERLY;
+filter(covered_by) ->
+    ?EASTON_FILTER_COVERED_BY;
+filter(<<"covered_by">>) ->
+    ?EASTON_FILTER_COVERED_BY;
+filter(covers) ->
+    ?EASTON_FILTER_COVERS;
+filter(<<"covers">>) ->
+    ?EASTON_FILTER_COVERS;
+filter(crosses) ->
+    ?EASTON_FILTER_CROSSES;
+filter(<<"crosses">>) ->
+    ?EASTON_FILTER_CROSSES;
+filter(disjoint) ->
+    ?EASTON_FILTER_DISJOINT;
+filter(<<"disjoint">>) ->
+    ?EASTON_FILTER_DISJOINT;
+filter(intersects) ->
+    ?EASTON_FILTER_INTERSECTS;
+filter(<<"intersects">>) ->
+    ?EASTON_FILTER_INTERSECTS;
+filter(overlaps) ->
+    ?EASTON_FILTER_OVERLAPS;
+filter(<<"overlaps">>) ->
+    ?EASTON_FILTER_OVERLAPS;
+filter(touches) ->
+    ?EASTON_FILTER_TOUCHES;
+filter(<<"touches">>) ->
+    ?EASTON_FILTER_TOUCHES;
+filter(within) ->
+    ?EASTON_FILTER_WITHIN;
+filter(<<"within">>) ->
+    ?EASTON_FILTER_WITHIN;
+filter(N) when N >= ?EASTON_FILTER_NONE, N =< ?EASTON_FILTER_MAX ->
+    N.
 
 
 kill_cmd(OsPid) ->

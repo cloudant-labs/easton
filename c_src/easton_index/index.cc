@@ -169,7 +169,7 @@ Index::remove(io::Bytes::Ptr docid)
 
 
 std::vector<Index::Result>
-Index::query(geo::Bounds::Ptr query, bool nearest)
+Index::search(geo::Bounds::Ptr query, bool nearest)
 {
     RTError err;
     IndexItemH* items;
@@ -186,7 +186,7 @@ Index::query(geo::Bounds::Ptr query, bool nearest)
     }
 
     if(err != RT_None) {
-        throw EastonException("Error executing query.");
+        throw EastonException("Error executing search.");
     }
 
     io::Bytes::Ptr docid;

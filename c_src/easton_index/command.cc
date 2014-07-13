@@ -234,12 +234,17 @@ remove_entry(easton::Index::Ptr idx, io::Reader::Ptr reader)
 
 
 io::Writer::Ptr
-query(easton::Index::Ptr idx, io::Reader::Ptr reader)
+search_entries(easton::Index::Ptr idx, io::Reader::Ptr reader)
 {
     geo::Ctx::Ptr ctx = idx->get_geo_ctx();
+
+    if(!reader->read_tuple_n(5)) {
+        throw EastonException("Invalid argument for search.");
+    }
+
     io::Bytes::Ptr wkb = reader->read_bytes();
     if(!wkb) {
-        throw EastonException("Invalid WKB argument for query.");
+        throw EastonException("Invalid WKB argument for search.");
     }
 
     uint64_t filter;
@@ -248,30 +253,30 @@ query(easton::Index::Ptr idx, io::Reader::Ptr reader)
     uint64_t offset;
 
     if(!reader->read(filter)) {
-        throw EastonException("Invalid filter argument for query.");
+        throw EastonException("Invalid filter argument for search.");
     }
 
     if(!reader->read(nearest)) {
-        throw EastonException("Invalid nearest argument for query.");
+        throw EastonException("Invalid nearest argument for search.");
     }
 
     if(!reader->read(limit)) {
-        throw EastonException("Invalid limit argument for query.");
+        throw EastonException("Invalid limit argument for search.");
     }
 
     if(!reader->read(offset)) {
-        throw EastonException("Invalid offset argument for query.");
+        throw EastonException("Invalid offset argument for search.");
     }
 
-    geo::Geom::Ptr query = ctx->from_wkb(wkb);
-    if(!query) {
-        throw EastonException("Unable to parse WKB geometry for query.");
+    geo::Geom::Ptr search = ctx->from_wkb(wkb);
+    if(!search) {
+        throw EastonException("Unable to parse WKB geometry for search.");
     }
 
-    geo::Bounds::Ptr bounds = query->get_bounds();
-    std::vector<easton::Index::Result> results = idx->query(bounds, nearest);
+    geo::Bounds::Ptr bounds = search->get_bounds();
+    std::vector<easton::Index::Result> results = idx->search(bounds, nearest);
 
-    geo::GeomFilter filtfun = ctx->make_filter(query, filter);
+    geo::GeomFilter filtfun = ctx->make_filter(search, filter);
 
     // Discard skip results and only keep up to
     // limit hits.
@@ -344,8 +349,8 @@ handle(easton::Index::Ptr idx, io::Reader::Ptr reader)
             return update_entry(idx, reader);
         case EASTON_COMMAND_REMOVE_ENTRIES:
             return remove_entry(idx, reader);
-        case EASTON_COMMAND_QUERY:
-            return query(idx, reader);
+        case EASTON_COMMAND_SEARCH:
+            return search_entries(idx, reader);
         default:
             throw EastonException("Unknown command op.");
     }
