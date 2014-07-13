@@ -3,7 +3,8 @@
 -include_lib("eunit/include/eunit.hrl").
 
 
-idx_dir() -> "test/test_03".
+idx_dir() ->
+    "idx/04".
 
 
 open_idx() ->
