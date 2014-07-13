@@ -34,7 +34,7 @@ convert({Props}) ->
 convert(?JSON_POINT, Props) ->
     Coord = get_coords(Props),
     {Dims, 1, Bin} = coord_to_wkb(Coord),
-    {Dims, 1, mkbin(?WKB_POINT, Dims, Bin)};
+    {Dims, 1, mkbin(?WKB_POINT, Dims, 0, Bin)};
 
 convert(?JSON_LINESTRING, Props) ->
     Coords = get_coords(Props),
@@ -48,23 +48,33 @@ convert(?JSON_POLYGON, Props) ->
 
 convert(?JSON_MULTIPOINT, Props) ->
     Coords = get_coords(Props),
-    {Dims, Count, Bin} = multi(fun coord_to_wkb/1, Coords),
+    {Dims, Count, Bin} = multi(?WKB_POINT, fun coord_to_wkb/1, Coords),
     {Dims, 1, mkbin(?WKB_MULTIPOINT, Dims, Count, Bin)};
 
 convert(?JSON_MULTILINESTRING, Props) ->
     Coords = get_coords(Props),
-    {Dims, Count, Bin} = multi(fun coords_to_wkb/1, Coords),
+    {Dims, Count, Bin} = multi(?WKB_LINESTRING, fun coords_to_wkb/1, Coords),
     {Dims, 1, mkbin(?WKB_MULTILINESTRING, Dims, Count, Bin)};
 
 convert(?JSON_MULTIPOLYGON, Props) ->
     Coords = get_coords(Props),
-    {Dims, Count, Bin} = multi(fun rings_to_wkb/1, Coords),
+    {Dims, Count, Bin} = multi(?WKB_POLYGON, fun rings_to_wkb/1, Coords),
     {Dims, 1, mkbin(?WKB_MULTIPOLYGON, Dims, Count, Bin)};
 
 convert(?JSON_GEOMETRYCOLLECTION, Props) ->
     Geoms = get_geoms(Props),
-    {Dims, Count, Bin} = multi(fun convert/1, Geoms),
-    {Dims, 1, mkbin(?WKB_GEOMETRYCOLLECTION, Dims, Count, Bin)};
+    {Dims, Count, AccBins} = lists:foldl(fun(G, {Dims, Count, Bins}) ->
+        case convert(G) of
+            {NewDims, 1, NewBin} when Dims == undefined, Bins == [] ->
+                {NewDims, 1, [NewBin]};
+            {Dims, 1, NewBin} ->
+                {Dims, Count + 1, [NewBin | Bins]};
+            {BadDims, _, _} ->
+                throw({invalid_geojson, mismatched_dimensions})
+        end
+    end, {undefined, 0, []}, Geoms),
+    FinalBin = iolist_to_binary(lists:reverse(AccBins)),
+    {Dims, 1, mkbin(?WKB_GEOMETRYCOLLECTION, Dims, Count, FinalBin)};
 
 convert(_, Props) ->
     throw({invalid_geojson, {bad_type, {Props}}}).
@@ -72,8 +82,10 @@ convert(_, Props) ->
 
 get_coords(Props) ->
     case lists:keyfind(?JSON_COORDINATES, 1, Props) of
-        {_, Coords} ->
+        {_, Coords} when is_list(Coords) ->
             Coords;
+        {_, _} ->
+            throw({invalid_geojson, {bad_coordinates, {Props}}});
         false ->
             throw({invalid_geojson, {missing_coordinates, {Props}}})
     end.
@@ -81,20 +93,23 @@ get_coords(Props) ->
 
 get_geoms(Props) ->
     case lists:keyfind(?JSON_GEOMETRIES, 1, Props) of
-        {_, Geoms} ->
+        {_, Geoms} when is_list(Geoms) ->
             Geoms;
+        {_, _} ->
+            throw({invalid_geojson, {bad_geometries, {Props}}});
         false ->
             throw({invalid_geojson, {missing_geometries, {Props}}})
     end.
 
 
-multi(_ToWKB, []) ->
+multi(_Type, _ToWKB, []) ->
     throw({invalid_geojson, empty_multi_geometry});
-multi(ToWKB, [Coords]) ->
-    ToWKB(Coords);
-multi(ToWKB, [Coords | Rest]) ->
-    {Dims, Count, AccBin} = multi(ToWKB, Rest),
-    case ToWKB(Coords) of
+multi(Type, ToWKB, [Coords]) ->
+    {Dims, Count, AccBin} = ToWKB(Coords),
+    {Dims, 1, mkbin(Type, Dims, Count, AccBin)};
+multi(Type, ToWKB, [Coords | Rest]) ->
+    {Dims, Count, AccBin} = multi(Type, ToWKB, Rest),
+    case multi(Type, ToWKB, [Coords]) of
         {Dims, 1, NewBin} ->
             {Dims, Count + 1, <<NewBin/binary, AccBin/binary>>};
         {_BadDims, _, _} ->
@@ -148,10 +163,9 @@ coord_to_wkb(BadCoord) ->
     throw({invalid_geojson, {bad_coord, BadCoord}}).
 
 
-mkbin(Type0, Dims, SubBin) ->
+mkbin(?WKB_POINT = Type0, Dims, _Count, SubBin) ->
     Type = type_to_wkb(Type0, Dims),
-    <<0:8/integer, Type:32/big-unsigned-integer, SubBin/binary>>.
-
+    <<0:8/integer, Type:32/big-unsigned-integer, SubBin/binary>>;
 
 mkbin(Type0, Dims, Count, SubBin) ->
     Type = type_to_wkb(Type0, Dims),
