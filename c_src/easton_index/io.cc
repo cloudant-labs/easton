@@ -511,7 +511,7 @@ Writer::start_list(int32_t arity)
 void
 Writer::write_empty_list()
 {
-    if(!ei_x_encode_empty_list(this->buff.get())) {
+    if(ei_x_encode_empty_list(this->buff.get()) != 0) {
         throw EastonException("Unable to encode empty list.");
     }
 }
