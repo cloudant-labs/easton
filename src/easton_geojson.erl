@@ -20,7 +20,7 @@
 
 to_wkb({Geom}) ->
     {_Dims, _Count, Bin} = convert({Geom}),
-    {ok, Bin}.
+    Bin.
 
 
 convert({Props}) ->
