@@ -182,6 +182,9 @@ del(Index, Key) ->
     end.
 
 
+update(Index, DocId, {_Props} = Geometry) ->
+    update(Index, DocId, [Geometry]);
+
 update(Index, DocId, Geometries) ->
     WKBs = [easton_geojson:to_wkb(G) || G <- Geometries],
     case cmd(Index, ?EASTON_COMMAND_UPDATE_ENTRIES, {DocId, WKBs}) of
