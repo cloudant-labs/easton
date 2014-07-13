@@ -93,7 +93,7 @@ multi(_ToWKB, []) ->
 multi(ToWKB, [Coords]) ->
     ToWKB(Coords);
 multi(ToWKB, [Coords | Rest]) ->
-    {Dims, Count, AccBin} = ToWKB(Rest),
+    {Dims, Count, AccBin} = multi(ToWKB, Rest),
     case ToWKB(Coords) of
         {Dims, 1, NewBin} ->
             {Dims, Count + 1, <<NewBin/binary, AccBin/binary>>};
