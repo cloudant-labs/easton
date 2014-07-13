@@ -1,4 +1,5 @@
 
+#include <float.h>
 #include <stdlib.h>
 
 #include "config.hh"
@@ -65,37 +66,21 @@ Index::curr_docid_num()
 uint64_t
 Index::doc_count()
 {
-    double* mins;
-    double* maxs;
-    uint32_t dims;
+    double mins[this->dimensions];
+    double maxs[this->dimensions];
     uint64_t n;
-    uint64_t ret = UINT64_MAX;
 
-    if(Index_GetBounds(this->geo_idx, &mins, &maxs, &dims) != RT_None) {
-        goto done;
+    for(uint32_t i = 0; i < this->dimensions; i++) {
+        mins[i] = -DBL_MAX;
+        maxs[i] = DBL_MAX;
     }
 
-    if(Index_Intersects_count(this->geo_idx, mins, maxs, dims, &n) != RT_None) {
-        goto done;
+    if(Index_Intersects_count(this->geo_idx,
+            mins, maxs, this->dimensions, &n) != RT_None) {
+        return UINT64_MAX;
     }
 
-    ret = n;
-
-done:
-
-    if(mins != NULL) {
-        free(mins);
-    }
-
-    if(maxs != NULL) {
-        free(maxs);
-    }
-
-    if(ret == UINT64_MAX) {
-        throw EastonException("Error getting document count.");
-    }
-
-    return ret;
+    return n;
 }
 
 
