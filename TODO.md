@@ -1,9 +1,3 @@
-Response SRID
-=============
-
-I need to reproject geometries as they come out of the index.
-
-
 Custom Vistor for Query Results
 ===============================
 
