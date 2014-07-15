@@ -252,6 +252,10 @@ Index::init_geo_idx(int argc, const char* argv[])
         throw EastonException("Error setting storage callbacks.");
     }
 
+    if(IndexProperty_SetWriteThrough(props, 1) != RT_None) {
+        throw EastonException("Error setting write through.");
+    }
+
     if(idx_type == EASTON_INDEX_TYPE_RTREE) {
         it = RT_RTree;
     } else if(idx_type == EASTON_INDEX_TYPE_TPRTREE) {
