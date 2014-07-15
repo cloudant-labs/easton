@@ -146,6 +146,31 @@ Geom::to_wkt()
 }
 
 
+io::Bytes::Ptr
+Geom::to_wkb()
+{
+    uint8_t* wkb;
+    uint32_t wkblen;
+    io::Bytes::Ptr ret;
+
+    int dims = GEOSGeom_getDimensions_r(this->ctx->ctx, this->ro_g);
+
+    GEOSWKBWriter* writer = GEOSWKBWriter_create_r(this->ctx->ctx);
+    GEOSWKBWriter_setOutputDimension_r(this->ctx->ctx, writer, dims);
+    wkb = GEOSWKBWriter_write_r(this->ctx->ctx,
+            writer, this->ro_g, (unsigned long*) &wkblen);
+
+    if(wkb) {
+        ret = io::Bytes::copy(wkb, wkblen);
+    }
+
+    GEOSFree_r(this->ctx->ctx, wkb);
+    GEOSWKBWriter_destroy_r(this->ctx->ctx, writer);
+
+    return ret;
+}
+
+
 bool
 Geom::is_valid()
 {

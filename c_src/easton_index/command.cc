@@ -313,6 +313,11 @@ search_entries(easton::Index::Ptr idx, io::Reader::Ptr reader)
             continue;
         }
 
+        if(resp_srid != ctx->get_srid()) {
+            hit = hit->reproject(ctx->get_srid(), resp_srid);
+            r.second = hit->to_wkb();
+        }
+
         hits.push_back(r);
     }
 

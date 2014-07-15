@@ -71,6 +71,7 @@ class Geom
         virtual ~Geom() = 0;
 
         std::string to_wkt();
+        io::Bytes::Ptr to_wkb();
 
         int get_type();
 
