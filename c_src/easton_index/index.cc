@@ -30,6 +30,7 @@ Index::Index(int argc, const char* argv[])
 
     this->init_storage();
     this->init_geo_idx(argc, argv);
+    this->init_srid(argv[3]);
 
     this->geo_ctx = geo::Ctx::create();
 }
@@ -305,6 +306,39 @@ Index::init_geo_idx(int argc, const char* argv[])
     }
 
     IndexProperty_Destroy(props);
+}
+
+
+void
+Index::init_srid(const char* srid_str)
+{
+    io::Transaction::Ptr tx = io::Transaction::autocommit(this->store);
+    this->srid = atoi(srid_str);
+
+    // Verify that we have the same SRID if we're
+    // reopening the index.
+    io::Bytes::Ptr key = this->store->make_key("meta", "srid");
+    io::Bytes::Ptr val = this->store->get_kv(key);
+
+    if(!val) {
+        // This is the first time we've opened the index.
+        // Store the SRID and call it a day.
+        io::Writer::Ptr writer = io::Writer::create();
+        uint64_t u_srid = this->srid;
+        writer->write(u_srid);
+        this->store->put_kv(key, writer->serialize());
+        return;
+    }
+
+    io::Reader::Ptr reader = io::Reader::create(val);
+    int64_t old_srid;
+    if(!reader->read(old_srid)) {
+        throw EastonException("Error reading stored SRID.");
+    }
+
+    if(this->srid != old_srid) {
+        throw EastonException("Invalid SRID.");
+    }
 }
 
 

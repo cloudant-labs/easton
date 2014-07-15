@@ -65,7 +65,8 @@ open(Directory, Opts) ->
 
     IndexType = get_index_type(Opts),
     Dimensions = get_index_dimensions(Opts),
-    Args = {args, ["run", Directory, IndexType, Dimensions]},
+    SRID = get_index_srid(Opts),
+    Args = {args, ["run", Directory, IndexType, Dimensions, SRID]},
 
     CsMapDir = get_cs_map_dir(Opts),
     Env = {env, [{"EASTON_CS_MAP_DIR", CsMapDir}]},
@@ -359,6 +360,17 @@ get_index_dimensions(Opts) ->
             throw({invalid_index_dimensions, Else});
         false ->
             "2"
+    end.
+
+
+get_index_srid(Opts) ->
+    case lists:keyfind(srid, 1, Opts) of
+        {_, N} when is_integer(N), N > 0 ->
+            integer_to_list(N);
+        {_, Else} ->
+            throw({invalid_index_srid, Else});
+        false ->
+            "4326"
     end.
 
 
