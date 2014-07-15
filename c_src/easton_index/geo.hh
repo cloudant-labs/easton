@@ -67,6 +67,8 @@ class Geom
 
         virtual ~Geom() = 0;
 
+        std::string to_wkt();
+
         int get_type();
 
         bool is_valid();

@@ -123,6 +123,16 @@ Geom::get_type()
 }
 
 
+std::string
+Geom::to_wkt()
+{
+    char* data = GEOSGeomToWKT_r(this->ctx->ctx, this->ro_g);
+    std::string ret(data);
+    free(data);
+    return ret;
+}
+
+
 bool
 Geom::is_valid()
 {
