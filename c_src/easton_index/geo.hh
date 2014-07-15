@@ -20,6 +20,9 @@ NS_EASTON_BEGIN
 NS_EASTON_GEO_BEGIN
 
 
+typedef GEOSContextHandle_t GEOSCtx;
+
+
 class Ctx;
 class Geom;
 class GeomRO;
@@ -182,14 +185,17 @@ class Ctx: public std::enable_shared_from_this<Ctx>
     public:
         typedef std::shared_ptr<Ctx> Ptr;
 
-        static Ptr create();
+        static Ptr create(uint32_t dimensions, int32_t srid);
         ~Ctx();
 
         Geom::Ptr from_wkb(io::Bytes::Ptr wkb);
+        int32_t get_srid();
+
         GeomFilter make_filter(Geom::Ptr geom, uint64_t filter);
 
     private:
         Ctx();
+        Ctx(uint32_t dimensions, int32_t srid);
         Ctx(const Ctx& other);
 
         GeomRO::Ptr wrap(const GEOSGeometry* g);
@@ -197,7 +203,9 @@ class Ctx: public std::enable_shared_from_this<Ctx>
 
         void destroy(GEOSGeometry* g);
 
-        GEOSContextHandle_t ctx;
+        uint32_t dimensions;
+        int32_t srid;
+        GEOSCtx ctx;
 
         friend class Geom;
         friend class GeomRO;

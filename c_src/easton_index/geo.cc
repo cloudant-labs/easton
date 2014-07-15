@@ -511,18 +511,27 @@ GeomFilter::operator()(Geom::Ptr other)
 
 
 Ctx::Ptr
-Ctx::create()
+Ctx::create(uint32_t dimensions, int32_t srid)
 {
-    return Ptr(new Ctx());
+    return Ptr(new Ctx(dimensions, srid));
 }
 
 
-Ctx::Ctx()
+Ctx::Ctx(uint32_t dimensions, int32_t srid)
 {
+    this->dimensions = dimensions;
+    this->srid = srid;
     this->ctx = initGEOS_r(geos_notice, geos_error);
     if(this->ctx == NULL) {
         throw std::bad_alloc();
     }
+}
+
+
+int32_t
+Ctx::get_srid()
+{
+    return this->srid;
 }
 
 

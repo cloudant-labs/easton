@@ -32,7 +32,7 @@ Index::Index(int argc, const char* argv[])
     this->init_geo_idx(argc, argv);
     this->init_srid(argv[3]);
 
-    this->geo_ctx = geo::Ctx::create();
+    this->geo_ctx = geo::Ctx::create(this->dimensions, this->srid);
 }
 
 
