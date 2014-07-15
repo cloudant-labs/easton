@@ -238,6 +238,14 @@ Reader::~Reader()
 }
 
 
+void
+Reader::print()
+{
+    int32_t pos = this->pos;
+    ei_print_term(stderr, (char*) this->data->get(), &(pos));
+}
+
+
 bool
 Reader::read(bool& val)
 {

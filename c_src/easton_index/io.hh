@@ -69,6 +69,8 @@ class Reader
         static Ptr create(Bytes::Ptr data);
         ~Reader();
 
+        void print();
+
         bool read(bool& val);
         bool read(int64_t& val);
         bool read(uint64_t& val);
