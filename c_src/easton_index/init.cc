@@ -23,7 +23,7 @@ show_stack(int sig)
     void* frames[64];
     size_t size;
 
-    size = backtrace(frames, 10);
+    size = backtrace(frames, 64);
 
     fprintf(stderr, "Error: Signal %d:\n", sig);
     backtrace_symbols_fd(frames, size, STDERR_FILENO);
