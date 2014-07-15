@@ -601,6 +601,18 @@ Storage::make_key(const char* tag, io::Bytes::Ptr val)
 Bytes::Ptr
 Storage::get_kv(Bytes::Ptr key)
 {
+    Transaction::Ptr t = this->tx.lock();
+
+    if(t) {
+        try {
+            return t->get_kv(key);
+        } catch (const std::out_of_range& e) {
+            // Fallback to the underlying data
+            // storage if the key isn't in the
+            // current transaction.
+        }
+    }
+
     std::string val;
     leveldb::Status s = this->db->Get(this->r_opts, key->slice(), &val);
     if(!s.ok() && !s.IsNotFound()) {
@@ -725,6 +737,15 @@ Transaction::commit()
     WBPtr b;
     b.swap(this->batch);
     this->store->write(b.get());
+    this->rbuf.clear();
+}
+
+
+Bytes::Ptr
+Transaction::get_kv(Bytes::Ptr key)
+{
+    std::string skey((char*) key->get(), key->size());
+    return this->rbuf.at(skey);
 }
 
 
@@ -736,6 +757,7 @@ Transaction::put_kv(Bytes::Ptr key, Bytes::Ptr val)
     }
 
     this->batch->Put(key->slice(), val->slice());
+    this->rbuf[std::string((char*) key->get(), key->size())] = val;
 }
 
 
@@ -747,6 +769,7 @@ Transaction::del_kv(Bytes::Ptr key)
     }
 
     this->batch->Delete(key->slice());
+    this->rbuf[std::string((char*) key->get(), key->size())] = NULL;
 }
 
 

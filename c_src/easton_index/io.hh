@@ -2,6 +2,9 @@
 #ifndef EASTON_IO_HH
 #define EASTON_IO_HH
 
+#include <string>
+#include <unordered_map>
+
 #include <leveldb/db.h>
 #include <leveldb/write_batch.h>
 #include <spatialindex/capi/sidx_api.h>
@@ -191,11 +194,13 @@ class Transaction
         Transaction(Storage::Ptr store, bool is_autocommit);
         Transaction(const Transaction& other);
 
+        io::Bytes::Ptr get_kv(Bytes::Ptr key);
         void put_kv(Bytes::Ptr key, Bytes::Ptr val);
         void del_kv(Bytes::Ptr key);
 
         Storage::Ptr store;
         WBPtr batch;
+        std::unordered_map<std::string, io::Bytes::Ptr> rbuf;
         bool is_autocommit;
 
         friend class Storage;
