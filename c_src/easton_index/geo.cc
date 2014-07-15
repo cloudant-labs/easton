@@ -1,6 +1,18 @@
 
+#include <string>
+#include <sstream>
+
+#include <geos/geom/Coordinate.h>
+#include <geos/geom/GeometryFactory.h>
+#include <geos/geom/Polygon.h>
+#include <geos/geom/PrecisionModel.h>
+#include <geos/io/WKBWriter.h>
+#include <geos/util/GeometricShapeFactory.h>
 #include <geos_c.h>
+
 #include <spatialindex/capi/sidx_api.h>
+
+#include <CsMap/cs_map.h>
 
 #include "config.hh"
 #include "exceptions.hh"
@@ -547,29 +559,474 @@ Ctx::~Ctx()
 }
 
 
+GeomFilter
+Ctx::make_filter(Geom::Ptr geom, uint64_t filter)
+{
+    return GeomFilter(this->shared_from_this(), geom, filter);
+}
+
+
+Geom::Ptr
+Ctx::geom_from_reader(io::Reader::Ptr reader, int32_t srid)
+{
+    if(!reader->read_tuple_n(2)) {
+        throw EastonException("Invalid shape tuple.");
+    }
+
+    std::string qtype;
+    if(!reader->read(qtype)) {
+        throw EastonException("Error decoding shape type.");
+    }
+
+    if(qtype == "wkb") {
+        io::Bytes::Ptr wkb = reader->read_bytes();
+        if(!wkb) {
+            throw EastonException("Invalid shape data for wkb.");
+        }
+        //return this->from_wkb(wkb, srid);
+        return this->from_wkb(wkb, srid);
+    }
+
+    if(qtype == "wkt") {
+        io::Bytes::Ptr wkt = reader->read_bytes();
+        if(!wkt) {
+            throw EastonException("Invalid shape data for wkt");
+        }
+        return this->from_wkt(wkt, srid);
+    }
+
+    if(qtype == "bbox") {
+        int32_t arity;
+        if(!reader->read_list(arity)) {
+            throw EastonException("Invalid coordinate list for bbox.");
+        }
+
+        if(arity != 4 && arity != 6 && arity != 8) {
+            throw EastonException("Invalid bounding box dimensions.");
+        }
+
+        double mins[arity/2];
+        double maxs[arity/2];
+
+        for(uint32_t i = 0; i < arity/2; i++) {
+            if(!reader->read(mins[i])) {
+                throw EastonException("Invalid coordinate in bbox.");
+            }
+        }
+
+        for(uint32_t i = 0; i < arity/2; i++) {
+            if(!reader->read(maxs[i])) {
+                throw EastonException("Invalid coordinate in bounding box.");
+            }
+        }
+
+        // Read past the list tail
+        if(!reader->read_empty_list()) {
+            throw EastonException("Improper list for bbox coordinates.");
+        }
+
+
+        return this->make_rectangle(mins, maxs, arity/2, srid);
+    }
+
+    if(qtype == "circle") {
+        if(!reader->read_tuple_n(3)) {
+            throw EastonException("Invalid circle definition.");
+        }
+        double x;
+        double y;
+        double r;
+
+        if(!reader->read(x)) {
+            throw EastonException("Invalid x coordinate for circle.");
+        }
+
+        if(!reader->read(y)) {
+            throw EastonException("Invalid y coordinate for circle.");
+        }
+
+        if(!reader->read(r)) {
+            throw EastonException("Invalid radius for circle.");
+        }
+
+        return this->make_circle(x, y, r, srid);
+    }
+
+    if(qtype == "ellipse") {
+        if(!reader->read_tuple_n(4)) {
+            throw EastonException("Invalid ellipse definition.");
+        }
+
+        double x;
+        double y;
+        double x_range;
+        double y_range;
+
+        if(!reader->read(x)) {
+            throw EastonException("Invalid x coordinate for ellipse.");
+        }
+
+        if(!reader->read(y)) {
+            throw EastonException("Invalid y coordinate for ellipse.");
+        }
+
+        if(!reader->read(x_range)) {
+            throw EastonException("Invalid x range for ellipse.");
+        }
+
+        if(!reader->read(y_range)) {
+            throw EastonException("Invalid y range for ellipse.");
+        }
+
+        return this->make_ellipse(x, y, x_range, y_range, srid);
+    }
+
+    throw EastonException("Unsupported shape definition type.");
+}
+
+
+Geom::Ptr
+Ctx::from_wkb(io::Bytes::Ptr wkb, int32_t srid)
+{
+    Geom::Ptr ret = this->from_wkb(wkb);
+
+    if(srid != this->srid) {
+        return ret->reproject(srid, this->srid);
+    }
+
+    return ret;
+}
+
+
+Geom::Ptr
+Ctx::from_wkt(io::Bytes::Ptr wkt, int32_t srid)
+{
+    Geom::Ptr ret = this->from_wkt(wkt);
+
+    if(srid != this->srid) {
+        return ret->reproject(srid, this->srid);
+    }
+
+    return ret;
+}
+
+
 Geom::Ptr
 Ctx::from_wkb(io::Bytes::Ptr wkb)
 {
     GEOSWKBReader* reader;
-    GEOSGeometry* geom;
 
     reader = GEOSWKBReader_create_r(this->ctx);
     if(reader == NULL) {
         return NULL;
     }
 
-    geom = GEOSWKBReader_read_r(this->ctx, reader, wkb->get(), wkb->size());
+    Geom::Ptr geom = this->wrap(
+            GEOSWKBReader_read_r(this->ctx, reader, wkb->get(), wkb->size())
+        );
 
     GEOSWKBReader_destroy_r(this->ctx, reader);
 
-    return this->wrap(geom);
+    return geom;
 }
 
 
-GeomFilter
-Ctx::make_filter(Geom::Ptr geom, uint64_t filter)
+Geom::Ptr
+Ctx::from_wkt(io::Bytes::Ptr wkt)
 {
-    return GeomFilter(this->shared_from_this(), geom, filter);
+    GEOSWKTReader* reader;
+
+    reader = GEOSWKTReader_create_r(this->ctx);
+    if(reader == NULL) {
+        return NULL;
+    }
+
+    Geom::Ptr geom = this->wrap(
+            GEOSWKTReader_read_r(this->ctx, reader, (char*) wkt->get())
+        );
+
+    GEOSWKTReader_destroy_r(this->ctx, reader);
+
+    return geom;
+}
+
+
+Geom::Ptr
+Ctx::make_rectangle(double* mins, double* maxs, uint32_t dims, int32_t srid)
+{
+    GEOSCoordSequence* cs = GEOSCoordSeq_create_r(this->ctx, 2, dims);
+
+    for(uint32_t i = 0; i < dims; i++)
+    {
+        if(!GEOSCoordSeq_setOrdinate_r(this->ctx, cs, 0, i, mins[i])) {
+            throw EastonException("Error setting bbox dimension.");
+        }
+        if(!GEOSCoordSeq_setOrdinate_r(this->ctx, cs, 1, i, maxs[i])) {
+            throw EastonException("Error setting bbox dimension.");
+        }
+    }
+
+    // Set the z and m dimensions to 0.0 if they aren't
+    // specified as part of the bounding box.
+    for(uint32_t i = dims; i < this->dimensions; i++) {
+        if(!GEOSCoordSeq_setOrdinate_r(this->ctx, cs, 0, i, 0.0)) {
+            throw EastonException("Error setting default bbox dimension.");
+        }
+        if(!GEOSCoordSeq_setOrdinate_r(this->ctx, cs, 1, i, 0.0)) {
+            throw EastonException("Error setting default bbox dimension.");
+        }
+    }
+
+    Geom::Ptr ls = this->wrap(GEOSGeom_createLineString_r(this->ctx, cs));
+    if(!ls) {
+        // Only destroy CS if the geometry constructor failed
+        // to take ownership.
+        GEOSCoordSeq_destroy_r(this->ctx, cs);
+        throw EastonException("Error creating geometry for bbox.");
+    }
+
+    // Turn the line into a bbox.
+    Geom::Ptr bbox = ls->get_envelope();
+
+    if(!bbox) {
+        throw EastonException("Eror creating bbox.");
+    }
+
+    if(srid != this->srid) {
+        return bbox->reproject(srid, this->srid);
+    }
+
+    return bbox;
+}
+
+
+Geom::Ptr
+Ctx::make_circle(double x, double y, double r, int32_t srid)
+{
+    // While reading about this I found these [1] PostGIS docs
+    // that say this isn't the most efficient method for
+    // performing a radius search. I'm not sure how much that
+    // has to do with their index types but it might be
+    // something to investigate in the future.
+    //
+    // [1] http://postgis.refractions.net/docs/ST_Buffer.html
+
+    double xyz[3];
+
+    xyz[0] = x;
+    xyz[1] = y;
+    xyz[2] = 0.0;
+
+    // First we reproject to the index SRID
+    if(!reproject(srid, this->srid, xyz)) {
+        throw EastonException("Error reprojecting index system.");
+    }
+
+    // Then convert to the LL coordinate system. I'm guessing
+    // this is to guarantee that we have a known ellipsoid
+    // to perform our calculations on.
+    if(!reproject(this->srid, "LL", xyz)) {
+        throw EastonException("Error reprojecting to LL system.");
+    }
+
+    char ellipsoid[MAXBUFLEN];
+    double e_radius;
+    double e_exc_sq;
+
+    if(CS_getEllipsoidOf("LL", ellipsoid, MAXBUFLEN) != 0) {
+        throw EastonException("Error getting the LL ellipsoid.");
+    }
+
+    // This gets the equatorial radius and excentricity squared
+    // values for the ellipsoid. Radius should be straight forward.
+    // The excentricity squared just tells us how oval-y the
+    // ellipsoid is.
+    if(CS_getElValues(ellipsoid, &e_radius, &e_exc_sq) != 0) {
+        throw EastonException("Error getting the LL ellipsoid parameters.");
+    }
+
+    // This calculates the coordinates of a point at the
+    // given azimuth (90.0, degrees east of north, whatever
+    // that means) and a distance (r) in units that match
+    // e_radius. Basically, we're figuring out how far away
+    // a point on the circumference would be accounting for the
+    // ellipsoidal nature of things.
+    double azdd_xyz[3];
+    if(CS_azddll(e_radius, e_exc_sq, xyz, 90.0, r, azdd_xyz) != 0) {
+        throw EastonException("Error calculating the LL XYZ point.");
+    }
+
+    // Now convert both of our coordinates back to the
+    // index's srid so we can create the circle.
+    if(!reproject("LL", this->srid, xyz)) {
+        throw EastonException("Error reprojecting circle center from LL.");
+    }
+
+    if(!reproject("LL", this->srid, azdd_xyz)) {
+        throw EastonException("Error reprojecting circumference point from LL");
+    }
+
+    // Our final radius is the difference in X coordinates
+    // because we used 90.0 degrees in the CS_azddll
+    // calculation.
+    double final_radius = fabs(xyz[0] - azdd_xyz[0]);
+
+    return this->make_circle_int(xyz[0], xyz[1], final_radius);
+}
+
+Geom::Ptr
+Ctx::make_circle_int(double x, double y, double radius)
+{
+    // Create a circle by defining the center point
+    // and then adding a defined buffer distance using
+    // the requested radius.
+    GEOSBufferParams* bp = NULL;
+    GEOSCoordSequence* cs = NULL;
+    GEOSGeometry* pt = NULL;
+    GEOSGeometry* ret = NULL;
+
+    bp = GEOSBufferParams_create_r(this->ctx);
+    if(bp == NULL) {
+        goto done;
+    }
+
+    cs = GEOSCoordSeq_create_r(this->ctx, 1, this->dimensions);
+    if(!GEOSCoordSeq_setOrdinate_r(this->ctx, cs, 0, 0, x)) {
+        goto done;
+    }
+
+    if(!GEOSCoordSeq_setOrdinate_r(this->ctx, cs, 0, 1, y)) {
+        goto done;
+    }
+
+    // Fill in the z and m dimensions if they exist
+    for(uint32_t i = 2; i < this->dimensions; i++) {
+        if(!GEOSCoordSeq_setOrdinate_r(this->ctx, cs, 0, i, 0.0)) {
+            goto done;
+        }
+    }
+
+    pt = GEOSGeom_createPoint_r(this->ctx, cs);
+    if(pt == NULL) {
+        goto done;
+    }
+
+    // cs is now owned by pt.
+    cs = NULL;
+
+    ret = GEOSBufferWithParams_r(this->ctx, pt, bp, radius);
+
+done:
+    if(bp != NULL) {
+        GEOSBufferParams_destroy_r(this->ctx, bp);
+    }
+
+    if(cs != NULL) {
+        GEOSCoordSeq_destroy_r(this->ctx, cs);
+    }
+
+    if(pt != NULL) {
+        GEOSGeom_destroy_r(this->ctx, pt);
+    }
+
+    return this->wrap(ret);
+}
+
+
+Geom::Ptr
+Ctx::make_ellipse(double x, double y, double x_range, double y_range,
+        int32_t srid)
+{
+    // For more explanation on what this function is doing,
+    // see the definition of make_circle above that includes
+    // the srid. The only difference here is that we calculate
+    // two distances for the X and Y directions.
+    //
+    // TODO: Ask Norman if we can't just re-implement make_circle
+    // by passing radius as both x_range and y_range. It seems like
+    // it'd be more accurate in terms of the ellipsoidal calcualtions
+    // but perhaps the shape generation isn't as good here.
+
+    double xyz[3];
+
+    xyz[0] = x;
+    xyz[1] = y;
+    xyz[2] = 0.0;
+
+    if(!reproject(srid, this->srid, xyz)) {
+        throw EastonException("Error reprojecting index system.");
+    }
+
+    if(!reproject(this->srid, "LL", xyz)) {
+        throw EastonException("Error reprojecting to LL system.");
+    }
+
+    char ellipsoid[MAXBUFLEN];
+    double e_radius;
+    double e_exc_sq;
+
+    if(CS_getEllipsoidOf("LL", ellipsoid, MAXBUFLEN) != 0) {
+        throw EastonException("Error getting the LL ellipsoid.");
+    }
+
+    if(CS_getElValues(ellipsoid, &e_radius, &e_exc_sq) != 0) {
+        throw EastonException("Error getting the LL ellipsoid parameters.");
+    }
+
+    double azdd_xyz_x[3];
+    if(CS_azddll(e_radius, e_exc_sq, xyz, 90.0, x_range, azdd_xyz_x) != 0) {
+        throw EastonException("Error calculating the LL XYZ point.");
+    }
+
+    double azdd_xyz_y[3];
+    if(CS_azddll(e_radius, e_exc_sq, xyz, 0.0, y_range, azdd_xyz_y) != 0) {
+        throw EastonException("Error calculating the LL XYZ point.");
+    }
+
+    if(!reproject("LL", this->srid, xyz)) {
+        throw EastonException("Error reprojecting ellipse center from LL.");
+    }
+
+    if(!reproject("LL", this->srid, azdd_xyz_x)) {
+        throw EastonException("Error reprojecting x_range point from LL");
+    }
+
+    if(!reproject("LL", this->srid, azdd_xyz_y)) {
+        throw EastonException("Error reprojecting y_range point from LL.");
+    }
+
+    x_range = fabs(xyz[0] - azdd_xyz_x[0]);
+    y_range = fabs(xyz[1] - azdd_xyz_y[1]);
+
+    return this->make_ellipse_int(xyz[0], xyz[1], x_range, y_range);
+}
+
+
+Geom::Ptr
+Ctx::make_ellipse_int(double x, double y, double x_range, double y_range)
+{
+    geos::geom::PrecisionModel pm;
+    geos::geom::GeometryFactory gf(&pm);
+    geos::util::GeometricShapeFactory sf(&gf);
+
+    sf.setCentre(geos::geom::Coordinate(x, y));
+    sf.setWidth(x_range);
+    sf.setHeight(y_range);
+
+    std::unique_ptr<geos::geom::Polygon> p(sf.createCircle());
+    if(!p) {
+        return NULL;
+    }
+
+    geos::io::WKBWriter writer;
+    writer.setOutputDimension(this->dimensions);
+    std::stringstream ss;
+    writer.write(*p.get(), ss);
+    std::string wkb_str = ss.str();
+
+    io::Bytes::Ptr wkb = io::Bytes::proxy(
+            (uint8_t*) wkb_str.data(), wkb_str.size());
+    return this->from_wkb(wkb);
 }
 
 
