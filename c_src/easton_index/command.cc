@@ -238,13 +238,32 @@ search_entries(easton::Index::Ptr idx, io::Reader::Ptr reader)
 {
     geo::Ctx::Ptr ctx = idx->get_geo_ctx();
 
-    if(!reader->read_tuple_n(5)) {
+    if(!reader->read_tuple_n(7)) {
         throw EastonException("Invalid argument for search.");
     }
 
-    io::Bytes::Ptr wkb = reader->read_bytes();
-    if(!wkb) {
-        throw EastonException("Invalid WKB argument for search.");
+    int64_t req_srid;
+    int64_t resp_srid;
+
+    if(!reader->read(req_srid)) {
+        throw EastonException("Invalid req_srid argument for search.");
+    }
+
+    if(req_srid == 0) {
+        req_srid = ctx->get_srid();
+    }
+
+    if(!reader->read(resp_srid)) {
+        throw EastonException("Invalid resp_srid argument for search.");
+    }
+
+    if(resp_srid == 0) {
+        resp_srid = ctx->get_srid();
+    }
+
+    geo::Geom::Ptr search = ctx->geom_from_reader(reader, req_srid);
+    if(!search) {
+        throw EastonException("Invalid query argument for search.");
     }
 
     uint64_t filter;
@@ -266,11 +285,6 @@ search_entries(easton::Index::Ptr idx, io::Reader::Ptr reader)
 
     if(!reader->read(offset)) {
         throw EastonException("Invalid offset argument for search.");
-    }
-
-    geo::Geom::Ptr search = ctx->from_wkb(wkb);
-    if(!search) {
-        throw EastonException("Unable to parse WKB geometry for search.");
     }
 
     geo::Bounds::Ptr bounds = search->get_bounds();

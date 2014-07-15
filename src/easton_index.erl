@@ -22,9 +22,6 @@
     remove/2,
     search/2,
     search/3
-
-    % search/3,
-    % search/4
 ]).
 
 -export([
@@ -210,13 +207,15 @@ search(Index, Geometry) ->
     search(Index, Geometry, []).
 
 
-search(Index, Geometry, Opts) ->
-    WKB = easton_geojson:to_wkb(Geometry),
+search(Index, Query, Opts) ->
+    SQuery = fmt_query(Query),
+    ReqSRID = get_req_srid(Opts),
+    RespSRID = get_resp_srid(Opts),
     Filter = get_filter(Opts),
     Nearest = get_nearest(Opts),
     Limit = get_limit(Opts),
     Offset = get_offset(Opts),
-    Arg = {WKB, Filter, Nearest, Limit, Offset},
+    Arg = {ReqSRID, RespSRID, SQuery, Filter, Nearest, Limit, Offset},
     case cmd(Index, ?EASTON_COMMAND_SEARCH, Arg) of
         {ok, Results} ->
             {ok, [
@@ -389,6 +388,22 @@ get_cs_map_dir(Opts) ->
     end.
 
 
+fmt_query({_}=GeoJson) ->
+    {wkb, easton_geojson:to_wkb(GeoJson)};
+fmt_query(<<E:8/integer, _/binary>> = WKB) when E == 0 orelse E == 1 ->
+    {wkb, WKB};
+fmt_query(Bin) when is_binary(Bin) ->
+    {wkt, Bin};
+fmt_query(Coords) when is_list(Coords) ->
+    {bbox, [float(C) || C <- Coords]};
+fmt_query({X, Y, Radius}) ->
+    {circle, {float(X), float(Y), float(Radius)}};
+fmt_query({X, Y, XRange, YRange}) ->
+    {ellipse, {float(X), float(Y), float(XRange), float(YRange)}};
+fmt_query(Else) ->
+    Else.
+
+
 get_filter(Opts) ->
     case lists:keyfind(filter, 1, Opts) of
         {_, F} ->
@@ -419,6 +434,28 @@ get_offset(Opts) ->
             N;
         {_, Else} ->
             throw({invalid_offset, Else});
+        false ->
+            0
+    end.
+
+
+get_req_srid(Opts) ->
+    case lists:keyfind(req_srid, 1, Opts) of
+        {_, N} when is_integer(N), N >= 0 ->
+            N;
+        {_, Else} ->
+            throw({invalid_req_srid, Else});
+        false ->
+            0
+    end.
+
+
+get_resp_srid(Opts) ->
+    case lists:keyfind(resp_srid, 1, Opts) of
+        {_, N} when is_integer(N), N >= 0 ->
+            N;
+        {_, Else} ->
+            throw({invalid_resp_srid, Else});
         false ->
             0
     end.
