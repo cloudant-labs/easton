@@ -78,6 +78,7 @@ class Reader
         bool read(int64_t& val);
         bool read(uint64_t& val);
         bool read(double& val);
+        bool read(std::string& val);
 
         Bytes::Ptr read_bytes();
 
@@ -91,6 +92,7 @@ class Reader
 
         bool read_list(int32_t& arity);
         bool read_list_n(int32_t arity);
+        bool read_empty_list();
 
     private:
         Reader();

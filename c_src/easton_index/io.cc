@@ -304,6 +304,42 @@ Reader::read(double& val)
 }
 
 
+bool
+Reader::read(std::string& val)
+{
+    int32_t type;
+    int32_t bytes;
+
+    if(ei_get_type(
+            (char*) this->data->get(), &(this->pos), &type, &bytes) != 0) {
+        return false;
+    }
+
+    if(type != ERL_BINARY_EXT && type != ERL_ATOM_EXT) {
+        return false;
+    }
+
+    val.resize(bytes);
+    if(type == ERL_ATOM_EXT) {
+        if(ei_decode_atom(
+                (char*) this->data->get(), &(this->pos),
+                (char*) val.data()) != 0) {
+            return false;
+        }
+    } else if(type == ERL_BINARY_EXT) {
+        if(ei_decode_binary(
+                (char*) this->data->get(), &(this->pos),
+                (void*) val.data(), (long*) &bytes) != 0) {
+            return false;
+        }
+    } else {
+        return false;
+    }
+
+    return true;
+}
+
+
 Bytes::Ptr
 Reader::read_bytes()
 {
@@ -387,6 +423,13 @@ Reader::read_list_n(int32_t arity)
     }
 
     return true;
+}
+
+
+bool
+Reader::read_empty_list()
+{
+    return this->read_list_n(0);
 }
 
 
