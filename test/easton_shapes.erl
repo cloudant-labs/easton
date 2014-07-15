@@ -2,6 +2,12 @@
 
 
 -export([
+    point/2,
+    rectangle/4
+]).
+
+
+-export([
     point/0,
     linestring/0,
     polygon/0,
@@ -11,6 +17,28 @@
     multipolygon/0,
     geometrycollection/0
 ]).
+
+
+point(X, Y) ->
+    {[
+        {<<"type">>, <<"Point">>},
+        {<<"coordinates">>, [X, Y]}
+    ]}.
+
+
+rectangle(X1, Y1, X2, Y2) ->
+    {[
+        {<<"type">>, <<"Polygon">>},
+        {<<"coordinates">>, [
+            [
+                [X1, Y1],
+                [X1, Y2],
+                [X2, Y2],
+                [X2, Y1],
+                [X1, Y1]
+            ]
+        ]}
+    ]}.
 
 
 point() ->
