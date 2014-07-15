@@ -67,6 +67,23 @@ class IndexException: public std::exception
 };
 
 
+class GeoException: public std::exception
+{
+    public:
+        GeoException(const char* msg) {
+            this->msg = msg;
+        }
+
+        virtual ~GeoException() throw() {}
+
+        virtual const char* what() const throw() {
+            return this->msg.c_str();
+        }
+
+        std::string msg;
+};
+
+
 NS_EASTON_END
 
 

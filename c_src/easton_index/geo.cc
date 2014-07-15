@@ -7,6 +7,9 @@
 #include "geo.hh"
 
 
+#define MAXBUFLEN 1024
+
+
 NS_EASTON_BEGIN
 NS_EASTON_GEO_BEGIN
 
@@ -21,7 +24,14 @@ geos_notice(const char* fmt, ...) {
 
 static void
 geos_error(const char* fmt, ...) {
-    return;
+    char buf[MAXBUFLEN];
+    va_list ap;
+
+    va_start(ap, fmt);
+    vsnprintf(buf, MAXBUFLEN, fmt, ap);
+    va_end(ap);
+
+    throw GeoException(buf);
 }
 
 
