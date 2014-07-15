@@ -65,7 +65,10 @@ sm_store_cb(const void* context,
         int64_t* id, const uint32_t len, const uint8_t* const data, int* err)
 {
     Storage* s = get_storage(context);
-    *id = s->new_geoid();
+
+    if(*id == SpatialIndex::StorageManager::NewPage) {
+        *id = s->new_geoid();
+    }
 
     // TODO: Figure out how to make a const proxy.
     Bytes::Ptr key = geo_key(*id);
