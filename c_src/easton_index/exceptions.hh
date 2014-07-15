@@ -50,6 +50,23 @@ class EastonExit: public std::exception
 };
 
 
+class IndexException: public std::exception
+{
+    public:
+        IndexException(std::string& msg) {
+            this->msg = msg;
+        }
+
+        virtual ~IndexException() throw() {}
+
+        virtual const char*  what() const throw() {
+            return this->msg.c_str();
+        }
+
+        std::string msg;
+};
+
+
 NS_EASTON_END
 
 

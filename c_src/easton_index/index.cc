@@ -186,7 +186,10 @@ Index::search(geo::Bounds::Ptr query, bool nearest)
     }
 
     if(err != RT_None) {
-        throw EastonException("Error executing search.");
+        char* err = Error_GetLastErrorMsg();
+        std::string m(err);
+        free(err);
+        throw IndexException(m);
     }
 
     io::Bytes::Ptr docid;
