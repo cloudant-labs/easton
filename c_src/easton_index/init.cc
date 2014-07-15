@@ -27,6 +27,11 @@ show_stack(int sig)
 
     fprintf(stderr, "Error: Signal %d:\n", sig);
     backtrace_symbols_fd(frames, size, STDERR_FILENO);
+
+    if(sig == 0) {
+        return;
+    }
+
     exit(255);
 }
 
