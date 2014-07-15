@@ -5,6 +5,7 @@
 #include "config.hh"
 #include "exceptions.hh"
 #include "geo.hh"
+#include "reproject.hh"
 
 
 #define MAXBUFLEN 1024
@@ -220,6 +221,18 @@ Geom::get_exterior_ring()
 }
 
 
+Geom::Ptr
+Geom::reproject(int32_t src_srid, int32_t tgt_srid)
+{
+    return this->ctx->wrap(geo::reproject(
+            this->ctx->ctx,
+            this->ro_g,
+            src_srid,
+            tgt_srid
+        ));
+}
+
+
 Bounds::Ptr
 Geom::get_bounds()
 {
@@ -322,13 +335,6 @@ GeomRW::GeomRW(Ctx::Ptr ctx, GEOSGeometry* rw_g)
 GeomRW::~GeomRW()
 {
     this->ctx->destroy(this->rw_g);
-}
-
-
-void
-GeomRW::reproject(int src_srid, int tgt_srid)
-{
-
 }
 
 

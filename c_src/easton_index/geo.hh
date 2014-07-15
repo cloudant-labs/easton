@@ -83,6 +83,8 @@ class Geom
         Ptr get_envelope();
         Ptr get_exterior_ring();
 
+        Ptr reproject(int32_t src_srid, int32_t tgt_srid);
+
         Bounds::Ptr get_bounds();
 
         const GEOSCoordSequence* get_coords();
@@ -118,8 +120,6 @@ class GeomRW: public Geom
         typedef std::shared_ptr<GeomRW> Ptr;
 
         virtual ~GeomRW();
-
-        void reproject(int src_srid, int tgt_srid);
 
     private:
         GeomRW();
