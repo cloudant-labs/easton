@@ -154,6 +154,11 @@ Index::remove(io::Bytes::Ptr docid)
     io::Transaction::Ptr tx = io::Transaction::open(this->store);
     io::Bytes::Ptr dockey = this->store->make_key("docid", docid);
     io::Bytes::Ptr val = this->store->get_kv(dockey);
+
+    if(!val) {
+        return;
+    }
+
     geo::Bounds::Vector bounds;
     uint64_t docnum = this->read_id_value(val, bounds);
 
