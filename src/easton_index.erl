@@ -340,7 +340,7 @@ exe_name() ->
 
 
 get_index_type(Opts) ->
-    Type = case lists:keyfind(index_type, 1, Opts) of
+    Type = case lists:keyfind(type, 1, Opts) of
         {_, <<"rtree">>} -> ?EASTON_INDEX_TYPE_RTREE;
         {_, rtree} -> ?EASTON_INDEX_TYPE_RTREE;
         {_, <<"tprtree">>} -> ?EASTON_INDEX_TYPE_TPRTREE;
