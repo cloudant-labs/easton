@@ -43,6 +43,7 @@
 
 
 -record(st, {
+    parent,
     port,
     killer,
     closing = false
@@ -68,7 +69,7 @@ open(Directory, Opts) ->
     CsMapDir = get_cs_map_dir(Opts),
     Env = {env, [{"EASTON_CS_MAP_DIR", CsMapDir}]},
 
-    gen_server:start_link(?MODULE, [Args, Env], []).
+    gen_server:start_link(?MODULE, {self(), [Args, Env]}, []).
 
 
 close(Index) ->
@@ -226,9 +227,11 @@ search(Index, Query, Opts) ->
     end.
 
 
-init(Opts) ->
+init({Parent, Opts}) ->
+    erlang:monitor(process, Parent),
     {ok, Port, OsPid} = open_index(Opts),
     {ok, #st{
+        parent = Parent,
         port = Port,
         killer = erlang:spawn(?MODULE, kill_monitor, [self(), OsPid])
     }}.
@@ -266,6 +269,9 @@ handle_call(Msg, _From, St) ->
 handle_cast(Msg, St) ->
     {stop, {bad_cast, Msg}, St}.
 
+
+handle_info({'DOWN', _, _, Pid, _}, #st{parent = Pid} = St) ->
+    {stop, normal, St};
 
 handle_info({Port, {exit_status, 0}}, #st{port = Port, closing = true} = St) ->
     {stop, normal, St};
