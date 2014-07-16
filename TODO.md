@@ -1,3 +1,14 @@
+Add Index Size
+==============
+
+Need to be able to report the approximate byte count for the index so bacon can do its thing.
+
+Synchronous Start
+=================
+
+I should switch to using a synchronous startup using proc\_lib.
+
+
 Custom Vistor for Query Results
 ===============================
 
