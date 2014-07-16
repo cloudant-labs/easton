@@ -469,6 +469,8 @@ get_resp_srid(Opts) ->
 
 filter(none) ->
     ?EASTON_FILTER_NONE;
+filter(undefined) ->
+    ?EASTON_FILTER_NONE;
 filter(<<"none">>) ->
     ?EASTON_FILTER_NONE;
 filter(contains) ->
