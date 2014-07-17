@@ -51,7 +51,7 @@ init_signals()
 static void
 report_pid()
 {
-    uint32_t p = htonl((uint32_t) getpid());
+    uint32_t p = (uint32_t) getpid();
     io::Writer::Ptr writer = io::Writer::create();
     writer->start_tuple(2);
     writer->write("ok");
