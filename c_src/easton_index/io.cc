@@ -607,7 +607,7 @@ Storage::Storage(std::string dirname)
     this->r_opts.verify_checksums = true;
     this->r_opts.fill_cache = true;
 
-    this->w_opts.sync = false;
+    this->w_opts.sync = true;
 
     leveldb::Status s = leveldb::DB::Open(this->o_opts, dirname, &this->db);
     if(!s.ok()) {
