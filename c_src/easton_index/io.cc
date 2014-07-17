@@ -168,6 +168,24 @@ Bytes::~Bytes()
 }
 
 
+void
+Bytes::display()
+{
+    for(uint32_t i = 0; i < this->len; i += 2) {
+        fprintf(stderr, "%02x", this->data[i]);
+        if(i + 1 < this->len) {
+            fprintf(stderr, "%02x", this->data[i+1]);
+        }
+        if((i + 2) % 16 == 0) {
+            fprintf(stderr, "\r\n");
+        } else {
+            fprintf(stderr, " ");
+        }
+    }
+    fprintf(stderr, "\r\n");
+}
+
+
 leveldb::Slice
 Bytes::slice()
 {

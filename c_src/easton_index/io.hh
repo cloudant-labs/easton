@@ -33,6 +33,8 @@ class Bytes
         typedef std::vector<Ptr> Vector;
         typedef std::vector<Ptr>::iterator VIter;
 
+        void display();
+
         // Create objects that own the underlying memory
         static Ptr create(uint32_t len);
         static Ptr create(uint8_t* data, uint32_t len);
