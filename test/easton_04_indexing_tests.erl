@@ -31,6 +31,7 @@ basic_test_() ->
                 fun point_tests_/1,
                 fun linestring_tests_/1,
                 fun polygon_tests_/1,
+                fun polygon_with_hole_tests_/1,
                 fun multipoint_tests_/1,
                 fun multilinestring_tests_/1,
                 fun multipolygon_tests_/1,
@@ -52,7 +53,7 @@ polygon_tests_(Idx) ->
     {"Polygon - Simple", shape_tests(Idx, polygon)}.
 
 
-polygon_with_holes_tests_(Idx) ->
+polygon_with_hole_tests_(Idx) ->
     {"Polygon - With Hole", shape_tests(Idx, polygon_with_hole)}.
 
 
