@@ -307,13 +307,6 @@ Index::init_geo_idx(int argc, const char* argv[])
 
     props = get_si_index_properties(this->geo_idx);
 
-    // For some reason the properties returned from the
-    // tree don't set the index type.
-    //
-    // if(IndexProperty_GetIndexType(props) != it) {
-    //     exit(EASTON_ERROR_BAD_GEO_IDX_CFG);
-    // }
-
     if(IndexProperty_GetDimension(props) != this->dimensions) {
         throw EastonException("Dimension mismatch with existing geo index.");
     }
