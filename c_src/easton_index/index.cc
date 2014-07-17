@@ -240,6 +240,13 @@ Index::init_geo_idx(int argc, const char* argv[])
 
     this->dimensions = dims;
 
+    this->load_index_id();
+    if(this->index_id != SpatialIndex::StorageManager::NewPage) {
+        if(IndexProperty_SetIndexID(props, this->index_id) != RT_None) {
+            throw EastonException("Error setting index id.");
+        }
+    }
+
     if(IndexProperty_SetIndexStorage(props, RT_Custom) != RT_None) {
         throw EastonException("Error setting index storage type.");
     }
@@ -298,7 +305,7 @@ Index::init_geo_idx(int argc, const char* argv[])
     // Verify the properties after open are the
     // same as requested.
 
-    props = Index_GetProperties(this->geo_idx);
+    props = get_si_index_properties(this->geo_idx);
 
     // For some reason the properties returned from the
     // tree don't set the index type.
@@ -309,6 +316,14 @@ Index::init_geo_idx(int argc, const char* argv[])
 
     if(IndexProperty_GetDimension(props) != this->dimensions) {
         throw EastonException("Dimension mismatch with existing geo index.");
+    }
+
+    if(this->index_id == SpatialIndex::StorageManager::NewPage) {
+        this->index_id = IndexProperty_GetIndexID(props);
+        if(this->index_id == SpatialIndex::StorageManager::NewPage) {
+            throw EastonException("Error retrieving index id.");
+        }
+        this->store_index_id();
     }
 
     IndexProperty_Destroy(props);
@@ -460,6 +475,33 @@ Index::read_geo_value(IndexItemH item,
 
     docid = reader->read_bytes();
     wkb = reader->read_bytes();
+}
+
+
+void
+Index::load_index_id()
+{
+    io::Bytes::Ptr key = this->store->make_key("meta", "index_id");
+    io::Bytes::Ptr val = this->store->get_kv(key);
+
+    if(!val) {
+        this->index_id = SpatialIndex::StorageManager::NewPage;
+    } else {
+        io::Reader::Ptr reader = io::Reader::create(val);
+        if(!reader->read(this->index_id)) {
+            throw EastonException("Error reading index id.");
+        }
+    }
+}
+
+
+void
+Index::store_index_id()
+{
+    io::Bytes::Ptr key = this->store->make_key("meta", "index_id");
+    io::Writer::Ptr writer = io::Writer::create();
+    writer->write(this->index_id);
+    this->store->put_kv(key, writer->serialize());
 }
 
 

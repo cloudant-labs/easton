@@ -53,6 +53,8 @@ class Index
         void init_storage();
         void init_geo_idx(int argc, const char* argv[]);
         void init_srid(const char* srid_str);
+        void load_index_id();
+        void store_index_id();
 
         uint64_t get_docid_num(io::Bytes::Ptr docid);
 
@@ -78,6 +80,7 @@ class Index
 
         uint64_t dimensions;
         uint64_t docid_num;
+        int64_t index_id;
 };
 
 
