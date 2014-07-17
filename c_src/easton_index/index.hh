@@ -13,10 +13,6 @@
 using namespace easton;
 
 
-std::string get_si_index_error();
-IndexPropertyH get_si_index_properties(IndexH index);
-
-
 NS_EASTON_BEGIN
 
 

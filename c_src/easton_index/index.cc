@@ -2,12 +2,35 @@
 #include <float.h>
 #include <stdlib.h>
 
+#include <spatialindex/capi/sidx_impl.h>
+
 #include "config.hh"
 #include "exceptions.hh"
 #include "index.hh"
 
 
 NS_EASTON_BEGIN
+
+
+std::string
+sidx_error()
+{
+    char* err = Error_GetLastErrorMsg();
+    std::string m(err);
+    free(err);
+    return m;
+}
+
+
+IndexPropertyH
+sidx_properties(IndexH index)
+{
+    ::Index* idx = static_cast<::Index*>(index);
+    Tools::PropertySet* ps = new Tools::PropertySet;
+
+    *ps = idx->GetProperties();
+    return (IndexPropertyH)ps;
+}
 
 
 Index::Ptr
@@ -192,7 +215,7 @@ Index::search(geo::Bounds::Ptr query, bool nearest)
     }
 
     if(err != RT_None) {
-        throw IndexException("Search error: " + get_si_index_error());
+        throw IndexException("Search error: " + sidx_error());
     }
 
     io::Bytes::Ptr docid;
@@ -293,11 +316,11 @@ Index::init_geo_idx(int argc, const char* argv[])
 
     this->geo_idx = Index_Create(props);
     if(this->geo_idx == NULL) {
-        throw IndexException("Geo Index Error: " + get_si_index_error());
+        throw IndexException("Geo Index Error: " + sidx_error());
     }
 
     if(!Index_IsValid(this->geo_idx)) {
-        throw IndexException("Invalid Geo Index: " + get_si_index_error());
+        throw IndexException("Invalid Geo Index: " + sidx_error());
     }
 
     IndexProperty_Destroy(props);
@@ -305,7 +328,7 @@ Index::init_geo_idx(int argc, const char* argv[])
     // Verify the properties after open are the
     // same as requested.
 
-    props = get_si_index_properties(this->geo_idx);
+    props = sidx_properties(this->geo_idx);
 
     if(IndexProperty_GetDimension(props) != this->dimensions) {
         throw EastonException("Dimension mismatch with existing geo index.");
