@@ -53,7 +53,7 @@ class EastonExit: public std::exception
 class IndexException: public std::exception
 {
     public:
-        IndexException(std::string& msg) {
+        IndexException(std::string msg) {
             this->msg = msg;
         }
 
