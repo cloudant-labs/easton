@@ -777,9 +777,46 @@ Ctx::from_wkt(io::Bytes::Ptr wkt)
 
 
 Geom::Ptr
+Ctx::make_point(double x, double y, int32_t srid)
+{
+    GEOSCoordSequence* cs = GEOSCoordSeq_create_r(
+            this->ctx, 1, this->dimensions);
+
+    if(!GEOSCoordSeq_setOrdinate_r(this->ctx, cs, 0, 0, x)) {
+        throw EastonException("Error setting x coordinate for point.");
+    }
+
+    if(!GEOSCoordSeq_setOrdinate_r(this->ctx, cs, 0, 1, y)) {
+        throw EastonException("Error setting y coordinate for point.");
+    }
+
+    for(uint32_t i = 2; i < this->dimensions; i++) {
+        if(!GEOSCoordSeq_setOrdinate_r(this->ctx, cs, 0, i, 0.0)) {
+            throw EastonException("Error setting default point dimension.");
+        }
+    }
+
+    Geom::Ptr p = this->wrap(GEOSGeom_createPoint_r(this->ctx, cs));
+    if(!p) {
+        // Only destroy CS if the geometry constructor failed
+        // to take ownership.
+        GEOSCoordSeq_destroy_r(this->ctx, cs);
+        throw EastonException("Error creating geometry for point.");
+    }
+
+    if(srid != this->srid) {
+        return p->reproject(srid, this->srid);
+    }
+
+    return p;
+}
+
+
+Geom::Ptr
 Ctx::make_rectangle(double* mins, double* maxs, uint32_t dims, int32_t srid)
 {
-    GEOSCoordSequence* cs = GEOSCoordSeq_create_r(this->ctx, 2, dims);
+    GEOSCoordSequence* cs = GEOSCoordSeq_create_r(
+            this->ctx, 2, this->dimensions);
 
     for(uint32_t i = 0; i < dims; i++)
     {
@@ -828,6 +865,14 @@ Ctx::make_rectangle(double* mins, double* maxs, uint32_t dims, int32_t srid)
 Geom::Ptr
 Ctx::make_circle(double x, double y, double r, int32_t srid)
 {
+    // A circle with a zero-radius is a point. For some
+    // reason the regular circle generation returns an
+    // empty geometry.
+
+    if(r == 0.0) {
+        return this->make_point(x, y, srid);
+    }
+
     // While reading about this I found these [1] PostGIS docs
     // that say this isn't the most efficient method for
     // performing a radius search. I'm not sure how much that
@@ -962,6 +1007,11 @@ Geom::Ptr
 Ctx::make_ellipse(double x, double y, double x_range, double y_range,
         int32_t srid)
 {
+    // An ellipse with zero length axes is a point.
+    if(x_range == 0.0 && y_range == 0.0) {
+        return this->make_point(x, y, srid);
+    }
+
     // For more explanation on what this function is doing,
     // see the definition of make_circle above that includes
     // the srid. The only difference here is that we calculate

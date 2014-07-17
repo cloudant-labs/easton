@@ -201,6 +201,12 @@ class Ctx: public std::enable_shared_from_this<Ctx>
         Geom::Ptr from_wkb(io::Bytes::Ptr wkb);
         Geom::Ptr from_wkt(io::Bytes::Ptr wkt);
 
+        Geom::Ptr make_point(
+                double x,
+                double y,
+                int32_t srid
+            );
+
         Geom::Ptr make_rectangle(
                 double* mins,
                 double* maxs,
