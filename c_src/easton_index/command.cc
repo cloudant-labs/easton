@@ -266,6 +266,10 @@ search_entries(easton::Index::Ptr idx, io::Reader::Ptr reader)
         throw EastonException("Invalid query argument for search.");
     }
 
+    if(search->is_empty()) {
+        throw EastonException("Unable to search with an empty geometry.");
+    }
+
     uint64_t filter;
     bool nearest;
     uint64_t limit;

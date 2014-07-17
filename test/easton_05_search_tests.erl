@@ -27,6 +27,8 @@ search_test_() ->
                 fun get_bbox_coord_test/1,
                 fun get_circle_test/1,
                 fun get_ellipse_test/1,
+                fun get_empty_shapes_test/1,
+                fun get_empty_wkt_test/1,
                 fun get_with_req_srid_test/1
             ]} end
         }
@@ -122,6 +124,20 @@ get_ellipse_test(Idx) ->
     Query = {0, 0, 1, 0.5},
     {ok, Results} = easton_index:search(Idx, Query, [{limit, 5000}]),
     ?assert(length(Results) < 1000).
+
+
+get_empty_shapes_test(Idx) ->
+    EmptyBBox = [0, 0, 0, 0],
+    EmptyCircle = {0, 0, 0},
+    EmptyEllipse = {0, 0, 0, 0},
+    ?assertMatch({ok, _}, easton_index:search(Idx, EmptyBBox)),
+    ?assertMatch({ok, _}, easton_index:search(Idx, EmptyCircle)),
+    ?assertMatch({ok, _}, easton_index:search(Idx, EmptyEllipse)).
+
+
+get_empty_wkt_test(Idx) ->
+    EmptyWKT = <<"POLYGON(EMPTY)">>,
+    ?assertThrow({error, _}, easton_index:search(Idx, EmptyWKT)).
 
 
 get_with_req_srid_test(Idx) ->
