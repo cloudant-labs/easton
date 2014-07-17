@@ -17,6 +17,7 @@
 
     doc_id_num/1,
     doc_count/1,
+    os_pid/1,
 
     update/3,
     remove/2,
@@ -45,6 +46,7 @@
 -record(st, {
     parent,
     port,
+    os_pid,
     killer,
     closing = false
 }).
@@ -144,6 +146,10 @@ doc_count(Index) ->
     end.
 
 
+os_pid(Index) ->
+    gen_server:call(Index, os_pid, infinity).
+
+
 put(Index, Key, Value) ->
     case cmd(Index, ?EASTON_COMMAND_PUT_USER_KV, {t2b(Key), t2b(Value)}) of
         ok ->
@@ -233,6 +239,7 @@ init({Parent, Opts}) ->
     {ok, #st{
         parent = Parent,
         port = Port,
+        os_pid = OsPid,
         killer = erlang:spawn(?MODULE, kill_monitor, [self(), OsPid])
     }}.
 
@@ -242,6 +249,9 @@ terminate(_Reason, St) ->
     catch erlang:close_port(St#st.port),
     ok.
 
+
+handle_call(os_pid, _From, St) ->
+    {reply, St#st.os_pid, St};
 
 handle_call(close, _From, #st{closing = true} = St) ->
     {reply, ok, St};
