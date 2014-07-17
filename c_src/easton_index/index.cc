@@ -192,10 +192,7 @@ Index::search(geo::Bounds::Ptr query, bool nearest)
     }
 
     if(err != RT_None) {
-        char* err = Error_GetLastErrorMsg();
-        std::string m(err);
-        free(err);
-        throw IndexException(m);
+        throw IndexException("Search error: " + get_si_index_error());
     }
 
     io::Bytes::Ptr docid;
@@ -289,11 +286,11 @@ Index::init_geo_idx(int argc, const char* argv[])
 
     this->geo_idx = Index_Create(props);
     if(this->geo_idx == NULL) {
-        throw EastonException("Error creating geo index.");
+        throw IndexException("Geo Index Error: " + get_si_index_error());
     }
 
     if(!Index_IsValid(this->geo_idx)) {
-        throw EastonException("Created an invalid geo index.");
+        throw IndexException("Invalid Geo Index: " + get_si_index_error());
     }
 
     IndexProperty_Destroy(props);
