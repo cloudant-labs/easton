@@ -120,6 +120,8 @@ class Index
         Index(int argc, const char* argv[]);
         Index(const Index& other);
 
+        void remove_int(io::Bytes::Ptr docid);
+
         void init_storage();
         void init_geo_idx(int argc, const char* argv[]);
         void init_srid(const char* srid_str);

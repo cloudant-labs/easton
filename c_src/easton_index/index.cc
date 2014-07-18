@@ -343,6 +343,11 @@ Index::update(io::Bytes::Ptr docid, io::Bytes::Vector wkbs)
 {
     io::Transaction::Ptr tx = io::Transaction::open(this->store);
     io::Bytes::Ptr dockey = this->store->make_key("docid", docid);
+
+    // Remove any results currently in the index for
+    // this docid.
+    this->remove_int(docid);
+
     uint64_t docnum = this->get_docid_num(dockey);
     geo::Bounds::Vector bounds;
 
@@ -379,6 +384,14 @@ void
 Index::remove(io::Bytes::Ptr docid)
 {
     io::Transaction::Ptr tx = io::Transaction::open(this->store);
+    this->remove_int(docid);
+    tx->commit();
+}
+
+
+void
+Index::remove_int(io::Bytes::Ptr docid)
+{
     io::Bytes::Ptr dockey = this->store->make_key("docid", docid);
     io::Bytes::Ptr val = this->store->get_kv(dockey);
 
@@ -397,7 +410,6 @@ Index::remove(io::Bytes::Ptr docid)
     }
 
     this->store->del_kv(dockey);
-    tx->commit();
 }
 
 

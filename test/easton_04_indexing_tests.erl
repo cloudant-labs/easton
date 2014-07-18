@@ -35,7 +35,8 @@ basic_test_() ->
                 fun multipoint_tests_/1,
                 fun multilinestring_tests_/1,
                 fun multipolygon_tests_/1,
-                fun geometrycollection_tests_/1
+                fun geometrycollection_tests_/1,
+                fun replacement_tests_/1
             ]
         }
     }.
@@ -71,6 +72,20 @@ multipolygon_tests_(Idx) ->
 
 geometrycollection_tests_(Idx) ->
     {"GeometryCollection", shape_tests(Idx, geometrycollection)}.
+
+
+replacement_tests_(Idx) ->
+    ?_test(begin
+        ok = easton_index:update(Idx, <<"foo">>, easton_shapes:point(0, 0)),
+        ?assertEqual({ok, 1}, easton_index:doc_count(Idx)),
+        ok = easton_index:update(Idx, <<"foo">>, easton_shapes:point(1, 1)),
+        ?assertEqual({ok, 1}, easton_index:doc_count(Idx)),
+        ?assertEqual(
+            {ok, [{<<"foo">>, 0.0}]},
+            easton_index:search(Idx, easton_shapes:point(1, 1))
+        )
+    end).
+
 
 
 shape_tests(Idx, Name) ->
