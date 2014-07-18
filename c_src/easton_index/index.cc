@@ -2,8 +2,6 @@
 #include <float.h>
 #include <stdlib.h>
 
-#include <spatialindex/capi/sidx_impl.h>
-
 #include "config.hh"
 #include "exceptions.hh"
 #include "index.hh"
@@ -30,6 +28,212 @@ sidx_properties(IndexH index)
 
     *ps = idx->GetProperties();
     return (IndexPropertyH)ps;
+}
+
+
+Hit::Hit()
+{
+    this->distance = -1.0;
+}
+
+
+Hit::Hit(io::Bytes::Ptr docid, geo::Geom::Ptr geom, double distance)
+{
+    this->docid = docid;
+    this->geom = geom;
+    this->distance = distance;
+}
+
+
+bool
+HitCmp::operator()(Hit const &h1, Hit const &h2) {
+    // First order by distance.
+
+    if(h1.distance <= h2.distance) {
+        return true;
+    }
+
+    if(h1.distance > h2.distance) {
+        return false;
+    }
+
+    // Use the document ID to break ties. Empty
+    // document IDs sort first.
+
+    if(!h1.docid) {
+        return true;
+    }
+
+    if(!h2.docid) {
+        return false;
+    }
+
+    // Raw byte comparisons here since I don't
+    // feel like pulling in ICU as a dependency.
+
+    uint32_t d1 = h1.docid->size();
+    uint32_t d2 = h2.docid->size();
+    uint32_t len = d1 < d2 ? d1 : d2;
+    int r = memcmp(h1.docid->get(), h2.docid->get(), len);
+
+    return r <= 0;
+}
+
+
+TopHits::TopHits(Hit bookmark, geo::GeomFilter filt, uint32_t limit)
+{
+    this->bookmark = bookmark;
+    this->filt = filt;
+    this->limit = limit;
+}
+
+
+TopHits::~TopHits()
+{
+}
+
+
+double
+TopHits::distance(io::Bytes::Ptr docid, geo::Geom::Ptr geom)
+{
+    if(!this->filt(geom)) {
+        return DBL_MAX;
+    }
+
+    double dist = this->filt.distance(geom);
+
+    // Create a hit object so we can compare against our
+    // configured bookmark.
+    Hit maybe_hit(docid, geom, dist);
+
+    // Ignore anything closer than our configured
+    // bookmark.
+    if(this->cmp(maybe_hit, this->bookmark)) {
+        return DBL_MAX;
+    }
+
+    return dist;
+}
+
+
+uint32_t
+TopHits::size()
+{
+    return this->hits.size();
+}
+
+
+void
+TopHits::push(io::Bytes::Ptr docid, geo::Geom::Ptr geom)
+{
+    // This logic is admittedly a bit weird. We're relying
+    // on TopHits::distance to return DBL_MAX for anything
+    // we don't want to include in the result set. The
+    // reason for this is so that we can reuse the distance
+    // function for nearest neighbor queries and still
+    // return properly paged result sets.
+
+    double dist = this->distance(docid, geom);
+
+    if(dist == DBL_MAX) {
+        return;
+    }
+
+    Hit hit(docid, geom, dist);
+
+    if(this->hits.size() < limit) {
+        this->hits.push(hit);
+    } else {
+        if(this->cmp(hit, this->hits.top())) {
+            this->hits.pop();
+            this->hits.push(hit);
+        }
+    }
+}
+
+
+Hit
+TopHits::pop()
+{
+    Hit ret = hits.top();
+    hits.pop();
+    return ret;
+}
+
+
+NNComparator::NNComparator(geo::Ctx::Ptr ctx, TopHits& hits) : hits(hits)
+{
+    this->ctx = ctx;
+}
+
+
+double
+NNComparator::getMinimumDistance(const SpatialIndex::IShape& query,
+        const SpatialIndex::IShape& e)
+{
+    return query.getMinimumDistance(e);
+}
+
+
+double
+NNComparator::getMinimumDistance(const SpatialIndex::IShape& query,
+        const SpatialIndex::IData& d)
+{
+    uint8_t* data;
+    uint32_t size;
+
+    d.getData(size, &data);
+
+    io::Bytes::Ptr buf = io::Bytes::proxy(data, size);
+    io::Reader::Ptr reader = io::Reader::create(buf);
+
+    io::Bytes::Ptr docid = reader->read_bytes();
+    io::Bytes::Ptr wkb = reader->read_bytes();
+    geo::Geom::Ptr geom = this->ctx->from_wkb(wkb);
+
+    return this->hits.distance(docid, geom);
+}
+
+
+EntryVisitor::EntryVisitor(geo::Ctx::Ptr ctx, TopHits& hits) : hits(hits)
+{
+    this->ctx = ctx;
+}
+
+
+EntryVisitor::~EntryVisitor()
+{
+}
+
+
+void
+EntryVisitor::visitNode(const SpatialIndex::INode& in)
+{
+}
+
+
+void
+EntryVisitor::visitData(const SpatialIndex::IData& d)
+{
+    uint8_t* data;
+    uint32_t size;
+
+    d.getData(size, &data);
+
+    io::Bytes::Ptr buf = io::Bytes::proxy(data, size);
+    io::Reader::Ptr reader = io::Reader::create(buf);
+
+    io::Bytes::Ptr docid = reader->read_bytes();
+    io::Bytes::Ptr wkb = reader->read_bytes();
+    geo::Geom::Ptr geom = this->ctx->from_wkb(wkb);
+
+    this->hits.push(docid, geom);
+}
+
+
+void
+EntryVisitor::visitData(std::vector<const SpatialIndex::IData*>& v)
+{
 }
 
 
@@ -197,37 +401,25 @@ Index::remove(io::Bytes::Ptr docid)
 }
 
 
-std::vector<Index::Result>
-Index::search(geo::Bounds::Ptr query, bool nearest)
+void
+Index::search(TopHits& collector, geo::Bounds::Ptr query, bool nearest)
 {
-    RTError err;
-    IndexItemH* items;
-    uint64_t num_items;
+    ::Index* idx = static_cast<::Index*>(this->geo_idx);
+    EntryVisitor visitor(this->geo_ctx, collector);
+    uint32_t lim = collector.limit;
 
-    if(nearest) {
-        err = Index_NearestNeighbors_obj(this->geo_idx,
-                query->mins(), query->maxs(),
-                this->dimensions, &items, &num_items);
-    } else {
-        err = Index_Intersects_obj(this->geo_idx,
-                query->mins(), query->maxs(),
-                this->dimensions, &items, &num_items);
+    try {
+        SpatialIndex::Region r(query->mins(), query->maxs(), query->get_dims());
+
+        if(nearest) {
+            NNComparator nnc(this->geo_ctx, collector);
+            idx->index().nearestNeighborQuery(lim, r, visitor, nnc);
+        } else {
+            idx->index().intersectsWithQuery(r, visitor);
+        }
+    } catch(Tools::Exception& e) {
+        throw IndexException("Search error: " + e.what());
     }
-
-    if(err != RT_None) {
-        throw IndexException("Search error: " + sidx_error());
-    }
-
-    io::Bytes::Ptr docid;
-    io::Bytes::Ptr wkb;
-    std::vector<Result> ret;
-
-    for(uint32_t i = 0; i < num_items; i++) {
-        this->read_geo_value(items[i], docid, wkb);
-        ret.push_back(Result(docid, wkb));
-    }
-
-    return ret;
 }
 
 

@@ -11,6 +11,9 @@ num_inner() ->
 num_outer() ->
     1000.
 
+num_points() ->
+    num_inner() + num_outer().
+
 
 search_test_() ->
     {"Search Tests",
@@ -20,8 +23,9 @@ search_test_() ->
             fun(Idx) -> {with, Idx, [
                 fun get_all_test/1,
                 fun get_limit_test/1,
-                fun get_offset_test/1,
                 fun get_nearest_test/1,
+                fun get_bookmark_test/1,
+                fun get_nearest_bookmark_test/1,
                 fun get_wkt_test/1,
                 fun get_bbox_test/1,
                 fun get_bbox_coord_test/1,
@@ -37,37 +41,63 @@ search_test_() ->
 
 get_all_test(Idx) ->
     Shape = easton_shapes:rectangle(-3, -3, 3, 3),
-    {ok, Results} = easton_index:search(Idx, Shape, [{limit, 50000}]),
-    ?assertEqual(num_inner() + num_outer(), length(Results)).
+    {ok, Results} = easton_index:search(Idx, Shape, [{limit, num_points()}]),
+    ?assertEqual(num_inner() + num_outer(), length(Results)),
+    SortedResults = lists:sort(fun({Id1, D1}, {Id2, D2}) ->
+        {D1, Id1} =< {D2, Id2}
+    end, Results),
+    ?assertEqual(SortedResults, Results).
 
 
 get_limit_test(Idx) ->
     Shape = easton_shapes:rectangle(-3, -3, 3, 3),
-    {ok, Results} = easton_index:search(Idx, Shape, [{limit, 1}]),
-    ?assertEqual(1, length(Results)).
-
-
-get_offset_test(Idx) ->
-    % No idea what sort of result consistency the
-    % results from libspatialindex might have so I'm
-    % hopefully making these general enough.
-    Shape = easton_shapes:rectangle(-3, -3, 3, 3),
-    {ok, Results1} = easton_index:search(Idx, Shape, [{limit, 1}]),
-    {ok, Results2} = easton_index:search(Idx, Shape, [{limit, 1}]),
-    ?assertEqual(Results1, Results2),
-    {ok, Results3} = easton_index:search(Idx, Shape, [{limit, 1}, {offset, 1}]),
-    ?assert(Results3 /= Results2),
-    {ok, Results4} = easton_index:search(Idx, Shape, [{limit, 2}, {offset, 1}]),
-    ?assertEqual(hd(Results4), hd(Results3)).
+    {ok, AllResults} = easton_index:search(Idx, Shape, [{limit, num_points()}]),
+    lists:foreach(fun(I) ->
+        {ok, Results} = easton_index:search(Idx, Shape, [{limit, I}]),
+        ?assertEqual(true, lists:prefix(Results, AllResults))
+    end, lists:seq(1, num_inner() + num_outer(), 250)).
 
 
 get_nearest_test(Idx) ->
-    % I think these may be ordered by distance from Shape. When
-    % I get to the custom visitor for paging they will be at
-    % which point we should assert on it here.
     Shape = easton_shapes:point(0, 0),
     {ok, Results} = easton_index:search(Idx, Shape, [nearest, {limit, 5}]),
-    ?assertEqual(5, length(Results)).
+    ?assertEqual(5, length(Results)),
+    SortedResults = lists:sort(fun({Id1, D1}, {Id2, D2}) ->
+        {D1, Id1} =< {D2, Id2}
+    end, Results),
+    ?assertEqual(SortedResults, Results).
+
+
+get_bookmark_test(Idx) ->
+    Shape = easton_shapes:rectangle(-3, -3, 3, 3),
+    {ok, AllResults} = easton_index:search(Idx, Shape, [{limit, num_points()}]),
+    lists:foreach(fun(I) ->
+        Bookmark = lists:nth(I, AllResults),
+        {ok, Results} = easton_index:search(Idx, Shape, [
+                {limit, num_points()},
+                {bookmark, Bookmark}
+            ]),
+        Tail = lists:nthtail(I, AllResults),
+        ?assertEqual(Tail, Results)
+    end, lists:seq(1, num_inner() + num_outer(), 250)).
+
+
+get_nearest_bookmark_test(Idx) ->
+    Shape = easton_shapes:rectangle(-3, -3, 3, 3),
+    {ok, AllResults} = easton_index:search(Idx, Shape, [
+            nearest,
+            {limit, num_points()}
+        ]),
+    lists:foreach(fun(I) ->
+        Bookmark = lists:nth(I, AllResults),
+        {ok, Results} = easton_index:search(Idx, Shape, [
+                nearest,
+                {limit, num_points()},
+                {bookmark, Bookmark}
+            ]),
+        Tail = lists:nthtail(I, AllResults),
+        ?assertEqual(Tail, Results)
+    end, lists:seq(1, num_inner() + num_outer(), 250)).
 
 
 get_wkt_test(Idx) ->
@@ -83,9 +113,9 @@ get_wkt_test(Idx) ->
 
 get_bbox_test(Idx) ->
     Query = [-1, -1, 1, 1],
-    {ok, Results1} = easton_index:search(Idx, Query, [{limit, 5000}]),
+    {ok, Results1} = easton_index:search(Idx, Query, [{limit, num_points()}]),
     Shape = easton_shapes:rectangle(-1, -1, 1, 1),
-    {ok, Results2} = easton_index:search(Idx, Shape, [{limit, 5000}]),
+    {ok, Results2} = easton_index:search(Idx, Shape, [{limit, num_points()}]),
     ?assertEqual(num_inner(), length(Results1)),
     ?assertEqual(num_inner(), length(Results2)),
     ?assertEqual(Results2, Results1).
@@ -98,10 +128,10 @@ get_bbox_coord_test(Idx) ->
     Query3 = [-1,  1,  1, -1],
     Query4 = [ 1, -1, -1,  1],
 
-    {ok, Results1} = easton_index:search(Idx, Query1, [{limit, 5000}]),
-    {ok, Results2} = easton_index:search(Idx, Query2, [{limit, 5000}]),
-    {ok, Results3} = easton_index:search(Idx, Query3, [{limit, 5000}]),
-    {ok, Results4} = easton_index:search(Idx, Query4, [{limit, 5000}]),
+    {ok, Results1} = easton_index:search(Idx, Query1, [{limit, num_points()}]),
+    {ok, Results2} = easton_index:search(Idx, Query2, [{limit, num_points()}]),
+    {ok, Results3} = easton_index:search(Idx, Query3, [{limit, num_points()}]),
+    {ok, Results4} = easton_index:search(Idx, Query4, [{limit, num_points()}]),
 
     ?assertEqual(num_inner(), length(Results1)),
     ?assertEqual(Results2, Results1),
@@ -115,14 +145,14 @@ get_circle_test(Idx) ->
     % are found but I hesitate to try that considering the
     % ellipsoidal calculations.
     Query = {0, 0, 1},
-    {ok, Results} = easton_index:search(Idx, Query, [{limit, 5000}]),
+    {ok, Results} = easton_index:search(Idx, Query, [{limit, num_points()}]),
     ?assert(length(Results) < 1000).
 
 
 get_ellipse_test(Idx) ->
     % Same as circle test
     Query = {0, 0, 1, 0.5},
-    {ok, Results} = easton_index:search(Idx, Query, [{limit, 5000}]),
+    {ok, Results} = easton_index:search(Idx, Query, [{limit, num_points()}]),
     ?assert(length(Results) < 1000).
 
 
@@ -231,7 +261,7 @@ gen(Idx, Num, Square) ->
 
 
 gen_point(I, Square) ->
-    IdNum = if Square == outter -> I + num_inner(); true -> I end,
+    IdNum = if Square == outer -> I + num_inner(); true -> I end,
     Id = iolist_to_binary(io_lib:format("~6..0b", [IdNum])),
     {X, Y} = gen_point(Square),
     {Id, easton_shapes:point(X, Y)}.

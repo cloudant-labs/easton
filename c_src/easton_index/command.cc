@@ -238,10 +238,16 @@ search_entries(easton::Index::Ptr idx, io::Reader::Ptr reader)
 {
     geo::Ctx::Ptr ctx = idx->get_geo_ctx();
 
-    if(!reader->read_tuple_n(7)) {
+    int32_t arity;
+    if(!reader->read_list(arity)) {
         throw EastonException("Invalid argument for search.");
     }
 
+    if(arity < 7 || arity > 8) {
+        throw EastonException("Invalid argument arity for search.");
+    }
+
+    int64_t ctx_srid = ctx->get_srid();
     int64_t req_srid;
     int64_t resp_srid;
 
@@ -250,7 +256,7 @@ search_entries(easton::Index::Ptr idx, io::Reader::Ptr reader)
     }
 
     if(req_srid == 0) {
-        req_srid = ctx->get_srid();
+        req_srid = ctx_srid;
     }
 
     if(!reader->read(resp_srid)) {
@@ -258,7 +264,7 @@ search_entries(easton::Index::Ptr idx, io::Reader::Ptr reader)
     }
 
     if(resp_srid == 0) {
-        resp_srid = ctx->get_srid();
+        resp_srid = ctx_srid;
     }
 
     geo::Geom::Ptr search = ctx->geom_from_reader(reader, req_srid);
@@ -273,7 +279,7 @@ search_entries(easton::Index::Ptr idx, io::Reader::Ptr reader)
     uint64_t filter;
     bool nearest;
     uint64_t limit;
-    uint64_t offset;
+    bool include_geom;
 
     if(!reader->read(filter)) {
         throw EastonException("Invalid filter argument for search.");
@@ -287,53 +293,64 @@ search_entries(easton::Index::Ptr idx, io::Reader::Ptr reader)
         throw EastonException("Invalid limit argument for search.");
     }
 
-    if(!reader->read(offset)) {
-        throw EastonException("Invalid offset argument for search.");
+    if(!reader->read(include_geom)) {
+        throw EastonException("Invalid include_geom argument for search.");
     }
 
+    Hit bookmark;
+    if(arity == 8) {
+        if(!reader->read_tuple_n(2)) {
+            throw EastonException("Invalid bookmark argument for search.");
+        }
+        bookmark.docid = reader->read_bytes();
+        if(!reader->read(bookmark.distance)) {
+            throw EastonException("Invalid bookmark distance for search.");
+        }
+    }
+
+    if(!reader->read_empty_list()) {
+        throw EastonException("Invalid list for search argument.");
+    }
+
+    geo::GeomFilter filtobj = ctx->make_filter(search, filter);
+    TopHits collector(bookmark, filtobj, limit);
     geo::Bounds::Ptr bounds = search->get_bounds();
-    std::vector<easton::Index::Result> results = idx->search(bounds, nearest);
 
-    geo::GeomFilter filtfun = ctx->make_filter(search, filter);
+    idx->search(collector, bounds, nearest);
 
-    // Discard skip results and only keep up to
-    // limit hits.
-    std::vector<easton::Index::Result> hits;
-    while(results.size() && hits.size() < limit) {
-        easton::Index::Result r = results.at(0);
-        results.erase(results.begin());
+    // Reverse and maybe reproject the hits
+    std::unique_ptr<Hit[]> results(new Hit[collector.size()]);
+    uint32_t count = collector.size();
+    for(uint32_t i = 0; i < count; i++) {
+        Hit h = collector.pop();
 
-        geo::Geom::Ptr hit = ctx->from_wkb(r.second);
-
-        // Anything that doesn't pass our filter was
-        // a false positive so ignore it.
-        if(!filtfun(hit)) {
-            continue;
+        if(include_geom) {
+            if(resp_srid != ctx_srid) {
+                h.wkb = h.geom->reproject(ctx_srid, resp_srid)->to_wkb();
+            } else {
+                h.wkb = h.geom->to_wkb();
+            }
         }
 
-        // Skip past the requested number of hits
-        if(offset > 0) {
-            offset--;
-            continue;
-        }
-
-        if(resp_srid != ctx->get_srid()) {
-            hit = hit->reproject(ctx->get_srid(), resp_srid);
-            r.second = hit->to_wkb();
-        }
-
-        hits.push_back(r);
+        results[count - i - 1] = h;
     }
 
+    // Send the results back to Erlang
     io::Writer::Ptr writer = io::Writer::create();
     writer->start_tuple(2);
     writer->write("ok");
-    writer->start_list(hits.size());
-    for(uint32_t i = 0; i < hits.size(); i++) {
-        easton::Index::Result r = hits.at(i);
-        writer->start_tuple(2);
-        writer->write(r.first);
-        writer->write(r.second);
+    writer->start_list(count);
+    for(uint32_t i = 0; i < count; i++) {
+        if(include_geom) {
+            writer->start_tuple(3);
+            writer->write(results[i].docid);
+            writer->write(results[i].distance);
+            writer->write(results[i].wkb);
+        } else {
+            writer->start_tuple(2);
+            writer->write(results[i].docid);
+            writer->write(results[i].distance);
+        }
     }
     writer->write_empty_list();
     return writer;

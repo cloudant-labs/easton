@@ -4,6 +4,7 @@
 
 
 #include <spatialindex/capi/sidx_api.h>
+#include <spatialindex/capi/sidx_impl.h>
 
 #include "easton.hh"
 #include "geo.hh"
@@ -16,11 +17,85 @@ using namespace easton;
 NS_EASTON_BEGIN
 
 
+class Hit
+{
+    public:
+        Hit();
+        Hit(io::Bytes::Ptr docid, geo::Geom::Ptr geom, double distance);
+
+        io::Bytes::Ptr docid;
+        geo::Geom::Ptr geom;
+        io::Bytes::Ptr wkb;
+        double distance;
+};
+
+
+struct HitCmp
+{
+    bool operator()(Hit const &h1, Hit const &h2);
+};
+
+
+class TopHits
+{
+    public:
+        TopHits(Hit bookmark, geo::GeomFilter filt, uint32_t limit);
+        ~TopHits();
+
+        double distance(io::Bytes::Ptr docid, geo::Geom::Ptr geom);
+
+        uint32_t size();
+
+        void push(io::Bytes::Ptr docid, geo::Geom::Ptr geom);
+        Hit pop();
+
+        std::priority_queue<Hit, std::vector<Hit>, HitCmp> hits;
+        HitCmp cmp;
+        Hit bookmark;
+        geo::GeomFilter filt;
+        uint32_t limit;
+};
+
+
+class NNComparator: public SpatialIndex::INearestNeighborComparator
+{
+    public:
+        NNComparator(geo::Ctx::Ptr ctx, TopHits& hits);
+
+        double getMinimumDistance(
+                const SpatialIndex::IShape& query,
+                const SpatialIndex::IShape& entry
+            );
+
+	    double getMinimumDistance(
+	            const SpatialIndex::IShape& query,
+	            const SpatialIndex::IData& data
+            );
+
+        geo::Ctx::Ptr ctx;
+        TopHits& hits;
+};
+
+
+class EntryVisitor: public SpatialIndex::IVisitor
+{
+    public:
+        EntryVisitor(geo::Ctx::Ptr ctx, TopHits& hits);
+        ~EntryVisitor();
+
+        void visitNode(const SpatialIndex::INode& n);
+        void visitData(const SpatialIndex::IData& d);
+        void visitData(std::vector<const SpatialIndex::IData*>& v);
+
+        geo::Ctx::Ptr ctx;
+        TopHits& hits;
+};
+
+
 class Index
 {
     public:
         typedef std::shared_ptr<Index> Ptr;
-        typedef std::pair<io::Bytes::Ptr, io::Bytes::Ptr> Result;
 
         static Ptr create(int argc, const char* argv[]);
         ~Index();
@@ -38,8 +113,7 @@ class Index
 
         void update(io::Bytes::Ptr docid, io::Bytes::Vector wkbs);
         void remove(io::Bytes::Ptr docid);
-
-        std::vector<Result> search(geo::Bounds::Ptr bounds, bool nearest);
+        void search(TopHits& collector, geo::Bounds::Ptr bounds, bool nearest);
 
     private:
         Index();

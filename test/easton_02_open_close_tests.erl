@@ -56,7 +56,7 @@ persistance_test() ->
     OsPid1 = easton_index:os_pid(Idx1),
     ?assertEqual(true, is_os_pid_alive(OsPid1)),
     ok = easton_index:update(Idx1, Id, Point),
-    ?assertEqual({ok, [{Id, Point}]}, easton_index:search(Idx1, Point)),
+    ?assertEqual({ok, [{Id, 0.0}]}, easton_index:search(Idx1, Point)),
     ok = easton_index:close(Idx1),
     ?assertEqual(false, is_process_alive(Idx1)),
     ?assertEqual(false, is_os_pid_alive(OsPid1)),
@@ -67,5 +67,5 @@ persistance_test() ->
     OsPid2 = easton_index:os_pid(Idx2),
     ?assertEqual(true, is_os_pid_alive(OsPid2)),
     ?assert(OsPid2 /= OsPid1),
-    ?assertEqual({ok, [{Id, Point}]}, easton_index:search(Idx2, Point)),
+    ?assertEqual({ok, [{Id, 0.0}]}, easton_index:search(Idx2, Point)),
     ok = easton_index:close(Idx2).

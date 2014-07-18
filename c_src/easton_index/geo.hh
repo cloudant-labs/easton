@@ -75,12 +75,16 @@ class Geom
 
         int get_type();
 
+        uint32_t get_dims();
         bool is_valid();
         bool is_empty();
         bool is_ring();
         bool is_closed();
         bool has_z();
 
+        double distance(Ptr other);
+
+        Ptr get_centroid();
         Ptr get_envelope();
         Ptr get_exterior_ring();
 
@@ -168,10 +172,14 @@ class PrepGeom
 class GeomFilter
 {
     public:
+        GeomFilter();
         GeomFilter(std::shared_ptr<Ctx> ctx, Geom::Ptr g, uint64_t filter);
         ~GeomFilter();
 
+        double distance(Geom::Ptr other);
+
         bool operator()(Geom::Ptr other);
+        Geom::Ptr geom();
 
     private:
         PrepGeom::Ptr pg;

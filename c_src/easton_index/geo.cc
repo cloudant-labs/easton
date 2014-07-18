@@ -170,6 +170,14 @@ Geom::to_wkb()
 }
 
 
+uint32_t
+Geom::get_dims()
+{
+    int dims = GEOSGeom_getDimensions_r(this->ctx->ctx, this->ro_g);
+    return (uint32_t) dims;
+}
+
+
 bool
 Geom::is_valid()
 {
@@ -222,6 +230,29 @@ Geom::has_z()
     }
 
     return false;
+}
+
+
+double
+Geom::distance(Ptr other)
+{
+    double dist;
+
+    Geom::Ptr c1 = this->get_centroid();
+    Geom::Ptr c2 = other->get_centroid();
+
+    if(!GEOSDistance_r(this->ctx->ctx, c1->ro_g, c2->ro_g, &dist)) {
+        throw EastonException("Error generating distance for geometries.");
+    }
+
+    return dist;
+}
+
+
+Geom::Ptr
+Geom::get_centroid()
+{
+    return this->ctx->wrap(GEOSGetCentroid_r(this->ctx->ctx, this->ro_g));
 }
 
 
@@ -502,6 +533,11 @@ PrepGeom::within(Geom::Ptr subj)
 }
 
 
+GeomFilter::GeomFilter()
+{
+}
+
+
 GeomFilter::GeomFilter(Ctx::Ptr ctx, Geom::Ptr g, uint64_t filter)
 {
     this->pg = PrepGeom::Ptr(new PrepGeom(ctx, g));
@@ -511,6 +547,13 @@ GeomFilter::GeomFilter(Ctx::Ptr ctx, Geom::Ptr g, uint64_t filter)
 
 GeomFilter::~GeomFilter()
 {
+}
+
+
+double
+GeomFilter::distance(Geom::Ptr other)
+{
+    return this->pg->base->distance(other);
 }
 
 

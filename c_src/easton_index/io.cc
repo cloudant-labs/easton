@@ -264,6 +264,7 @@ Reader::print()
 {
     int32_t pos = this->pos;
     ei_print_term(stderr, (char*) this->data->get(), &(pos));
+    fprintf(stderr, "\r\n");
 }
 
 

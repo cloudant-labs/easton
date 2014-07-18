@@ -215,19 +215,18 @@ search(Index, Geometry) ->
 
 
 search(Index, Query, Opts) ->
-    SQuery = fmt_query(Query),
-    ReqSRID = get_req_srid(Opts),
-    RespSRID = get_resp_srid(Opts),
-    Filter = get_filter(Opts),
-    Nearest = get_nearest(Opts),
-    Limit = get_limit(Opts),
-    Offset = get_offset(Opts),
-    Arg = {ReqSRID, RespSRID, SQuery, Filter, Nearest, Limit, Offset},
+    Arg = [
+        get_req_srid(Opts),
+        get_resp_srid(Opts),
+        fmt_query(Query),
+        get_filter(Opts),
+        get_nearest(Opts),
+        get_limit(Opts),
+        get_include_geom(Opts)
+    ] ++ get_bookmark(Opts),
     case cmd(Index, ?EASTON_COMMAND_SEARCH, Arg) of
         {ok, Results} ->
-            {ok, [
-                {Id, easton_geojson:from_wkb(WKB)} || {Id, WKB} <- Results
-            ]};
+            {ok, lists:map(fun fmt_result/1, Results)};
         Else ->
             throw(Else)
     end.
@@ -420,6 +419,28 @@ fmt_query(Else) ->
     Else.
 
 
+get_req_srid(Opts) ->
+    case lists:keyfind(req_srid, 1, Opts) of
+        {_, N} when is_integer(N), N >= 0 ->
+            N;
+        {_, Else} ->
+            throw({invalid_req_srid, Else});
+        false ->
+            0
+    end.
+
+
+get_resp_srid(Opts) ->
+    case lists:keyfind(resp_srid, 1, Opts) of
+        {_, N} when is_integer(N), N >= 0 ->
+            N;
+        {_, Else} ->
+            throw({invalid_resp_srid, Else});
+        false ->
+            0
+    end.
+
+
 get_filter(Opts) ->
     case lists:keyfind(filter, 1, Opts) of
         {_, F} ->
@@ -444,37 +465,30 @@ get_limit(Opts) ->
     end.
 
 
-get_offset(Opts) ->
-    case lists:keyfind(offset, 1, Opts) of
-        {_, N} when is_integer(N), N >= 0 ->
-            N;
-        {_, Else} ->
-            throw({invalid_offset, Else});
+get_include_geom(Opts) ->
+    case proplists:get_bool(include_geom, Opts) of
+        true ->
+            true;
         false ->
-            0
+            proplists:get_bool(include_geoms, Opts)
     end.
 
 
-get_req_srid(Opts) ->
-    case lists:keyfind(req_srid, 1, Opts) of
-        {_, N} when is_integer(N), N >= 0 ->
-            N;
+get_bookmark(Opts) ->
+    case lists:keyfind(bookmark, 1, Opts) of
+        {_, {DocId, Dist}} when is_binary(DocId), is_number(Dist) ->
+            [{DocId, float(Dist)}];
         {_, Else} ->
-            throw({invalid_req_srid, Else});
+            throw({invalid_bookmark, Else});
         false ->
-            0
+            []
     end.
 
 
-get_resp_srid(Opts) ->
-    case lists:keyfind(resp_srid, 1, Opts) of
-        {_, N} when is_integer(N), N >= 0 ->
-            N;
-        {_, Else} ->
-            throw({invalid_resp_srid, Else});
-        false ->
-            0
-    end.
+fmt_result({DocId, Dist}) ->
+    {DocId, Dist};
+fmt_result({DocId, Dist, WKB}) ->
+    {DocId, Dist, easton_geojson:from_wkb(WKB)}.
 
 
 filter(none) ->

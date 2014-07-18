@@ -80,8 +80,8 @@ shape_tests(Idx, Name) ->
         ?_assertEqual({ok, 1}, easton_index:doc_id_num(Idx)),
         ?_assertEqual({ok, 1}, easton_index:doc_count(Idx)),
         ?_assertEqual(
-            {ok, [{<<"foo">>, Shape}]},
-            easton_index:search(Idx, Shape)
+            {ok, [{<<"foo">>, 0.0, Shape}]},
+            easton_index:search(Idx, Shape, [include_geom])
         ),
         ?_assertEqual(ok, easton_index:remove(Idx, <<"foo">>)),
         ?_assertEqual({ok, 1}, easton_index:doc_id_num(Idx)),
