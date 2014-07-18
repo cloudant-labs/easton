@@ -153,10 +153,9 @@ Geom::to_wkb()
     uint32_t wkblen;
     io::Bytes::Ptr ret;
 
-    int dims = GEOSGeom_getDimensions_r(this->ctx->ctx, this->ro_g);
-
     GEOSWKBWriter* writer = GEOSWKBWriter_create_r(this->ctx->ctx);
-    GEOSWKBWriter_setOutputDimension_r(this->ctx->ctx, writer, dims);
+    GEOSWKBWriter_setOutputDimension_r(this->ctx->ctx, writer,
+            this->ctx->dimensions);
     wkb = GEOSWKBWriter_write_r(this->ctx->ctx,
             writer, this->ro_g, (unsigned long*) &wkblen);
 
