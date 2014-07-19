@@ -478,6 +478,8 @@ get_bookmark(Opts) ->
     case lists:keyfind(bookmark, 1, Opts) of
         {_, {DocId, Dist}} when is_binary(DocId), is_number(Dist) ->
             [{DocId, float(Dist)}];
+        {_, undefined} ->
+            [];
         {_, Else} ->
             throw({invalid_bookmark, Else});
         false ->
