@@ -9,12 +9,6 @@ Synchronous Start
 I should switch to using a synchronous startup using proc\_lib.
 
 
-Custom Vistor for Query Results
-===============================
-
-Currently libspatialindex loads the entire result set into memory before paging is applied. I'll need to write a thing that only keeps matches in RAM. I'll also need to figure out how to do the bookmarks/paging API.
-
-
 Index Arguments
 ===============
 
