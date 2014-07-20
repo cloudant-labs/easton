@@ -78,13 +78,19 @@ get_index_info(easton::Index::Ptr idx, io::Reader::Ptr reader)
 
     uint64_t doc_id_num = idx->curr_docid_num();
     uint64_t doc_count = idx->doc_count();
+    uint64_t data_size = idx->data_size();
 
     io::Writer::Ptr writer = io::Writer::create();
 
     // This encodes {ok, [{tag, value} | ...]}
     writer->start_tuple(2);
     writer->write("ok");
-    writer->start_list(2);
+
+    writer->start_list(3);
+
+    writer->start_tuple(2);
+    writer->write("data_size");
+    writer->write(data_size);
 
     writer->start_tuple(2);
     writer->write("doc_count");

@@ -149,6 +149,8 @@ class Storage
         static Ptr create(std::string dirname);
         ~Storage();
 
+        uint64_t data_size();
+
         io::Bytes::Ptr make_key(const char* tag, const char* val);
         io::Bytes::Ptr make_key(const char* tag, io::Bytes::Ptr val);
 

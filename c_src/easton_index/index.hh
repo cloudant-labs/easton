@@ -106,6 +106,7 @@ class Index
 
         uint64_t curr_docid_num();
         uint64_t doc_count();
+        uint64_t data_size();
 
         void put_kv(io::Bytes::Ptr key, io::Bytes::Ptr val);
         io::Bytes::Ptr get_kv(io::Bytes::Ptr key);

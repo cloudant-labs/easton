@@ -641,6 +641,18 @@ Storage::~Storage()
 }
 
 
+uint64_t
+Storage::data_size()
+{
+    leveldb::Range rng("", "\xFF\xFF\xFF\xFF");
+    uint64_t size;
+
+    this->db->GetApproximateSizes(&rng, 1, &size);
+
+    return size;
+}
+
+
 io::Bytes::Ptr
 Storage::make_key(const char* tag, const char* val)
 {

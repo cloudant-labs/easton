@@ -312,6 +312,13 @@ Index::doc_count()
 }
 
 
+uint64_t
+Index::data_size()
+{
+    return this->store->data_size();
+}
+
+
 void
 Index::put_kv(io::Bytes::Ptr user_key, io::Bytes::Ptr val)
 {

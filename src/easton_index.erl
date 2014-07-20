@@ -15,6 +15,7 @@
     get/3,
     del/2,
 
+    info/1,
     doc_id_num/1,
     doc_count/1,
     os_pid/1,
@@ -48,6 +49,7 @@
     port,
     os_pid,
     killer,
+    idx_dir,
     closing = false
 }).
 
@@ -71,20 +73,25 @@ open(Directory, Opts) ->
     CsMapDir = get_cs_map_dir(Opts),
     Env = {env, [{"EASTON_CS_MAP_DIR", CsMapDir}]},
 
-    gen_server:start_link(?MODULE, {self(), [Args, Env]}, []).
+    gen_server:start_link(?MODULE, {self(), Directory, [Args, Env]}, []).
 
 
 close(Index) ->
     Ref = erlang:monitor(process, Index),
     case gen_server:call(Index, close) of
-        {ok, true} ->
-            receive
-                {'DOWN', Ref, process, Index, _} ->
-                    ok
-            after 5000 ->
-                erlang:demonitor(Ref, [flush]),
-                throw({timeout, close})
-            end;
+        BinResp when is_binary(BinResp) ->
+            case binary_to_term(BinResp) of
+                {ok, true} ->
+                    receive
+                        {'DOWN', Ref, process, Index, _} ->
+                            ok
+                    after 5000 ->
+                        erlang:demonitor(Ref, [flush]),
+                        throw({timeout, close})
+                    end;
+                Else ->
+                    throw(Else)
+                end;
         Else ->
             erlang:demonitor(Ref, [flush]),
             throw(Else)
@@ -131,7 +138,8 @@ destroy(Directory, Opts) ->
 info(Index) ->
     case cmd(Index, ?EASTON_COMMAND_GET_INDEX_INFO, true) of
         {ok, Info} ->
-            {ok, Info};
+            DiskSize = get_disk_size(Index),
+            {ok, [{disk_size, DiskSize} | Info]};
         Else ->
             throw(Else)
     end.
@@ -235,14 +243,15 @@ search(Index, Query, Opts) ->
     end.
 
 
-init({Parent, Opts}) ->
+init({Parent, Directory, Opts}) ->
     erlang:monitor(process, Parent),
     {ok, Port, OsPid} = open_index(Opts),
     {ok, #st{
         parent = Parent,
         port = Port,
         os_pid = OsPid,
-        killer = erlang:spawn(?MODULE, kill_monitor, [self(), OsPid])
+        killer = erlang:spawn(?MODULE, kill_monitor, [self(), OsPid]),
+        idx_dir = Directory
     }}.
 
 
@@ -254,6 +263,9 @@ terminate(_Reason, St) ->
 
 handle_call(os_pid, _From, St) ->
     {reply, St#st.os_pid, St};
+
+handle_call(idx_dir, _From, St) ->
+    {reply, St#st.idx_dir, St};
 
 handle_call(close, _From, #st{closing = true} = St) ->
     {reply, ok, St};
@@ -267,7 +279,7 @@ handle_call({cmd, C}, _From, #st{port = Port} = St) ->
     true = erlang:port_command(St#st.port, C),
     receive
         {Port, {data, Resp}} ->
-            {reply, binary_to_term(Resp, [safe]), St};
+            {reply, Resp, St};
         Else ->
             throw({error, Else})
     after 5000 ->
@@ -300,7 +312,12 @@ code_change(_Vsn, St, _Extra) ->
 
 
 cmd(Index, OpCode, Args) ->
-    gen_server:call(Index, {cmd, t2b({OpCode, Args})}, infinity).
+    case gen_server:call(Index, {cmd, t2b({OpCode, Args})}, infinity) of
+        BinResp when is_binary(BinResp) ->
+            binary_to_term(BinResp);
+        Else ->
+            Else
+    end.
 
 
 kill_monitor(Pid, OsPid) ->
@@ -552,6 +569,15 @@ kill_cmd(OsPid) ->
         {win32, _} -> "taskkill /PID ~b"
     end,
     lists:flatten(io_lib:format(Fmt, [OsPid])).
+
+
+get_disk_size(Idx) ->
+    IdxDir = gen_server:call(Idx, idx_dir, infinity),
+    Pattern = filename:join(IdxDir, "*"),
+    FileNames = filelib:wildcard(Pattern),
+    lists:foldl(fun(FName, Acc) ->
+        Acc + filelib:file_size(FName)
+    end, 0, FileNames).
 
 
 t2b(T) ->
