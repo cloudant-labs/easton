@@ -573,7 +573,13 @@ kill_cmd(OsPid) ->
 
 get_disk_size(Idx) ->
     IdxDir = gen_server:call(Idx, idx_dir, infinity),
-    Pattern = filename:join(IdxDir, "*"),
+    Pattern0 = filename:join(IdxDir, "*"),
+    Pattern = case Pattern0 of
+        _ when is_binary(Pattern0) ->
+            binary_to_list(Pattern0);
+        _ ->
+            Pattern0
+    end,
     FileNames = filelib:wildcard(Pattern),
     lists:foldl(fun(FName, Acc) ->
         Acc + filelib:file_size(FName)
