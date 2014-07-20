@@ -64,34 +64,8 @@ sync_idx(easton::Index::Ptr idx, io::Reader::Ptr reader)
 
 
 io::Writer::Ptr
-get_doc_id_num(easton::Index::Ptr idx, io::Reader::Ptr reader)
+get_index_info(easton::Index::Ptr idx, io::Reader::Ptr reader)
 {
-    uint64_t doc_id_num;
-    bool v;
-
-    if(!reader->read(v)) {
-        throw EastonException("Invalid argument for get_doc_id_num.");
-    }
-
-    if(!v) {
-        throw EastonException("Invalid boolean for get_doc_id_num.");
-    }
-
-    doc_id_num = idx->curr_docid_num();
-
-    io::Writer::Ptr writer = io::Writer::create();
-    writer->start_tuple(2);
-    writer->write("ok");
-    writer->write(doc_id_num);
-
-    return writer;
-}
-
-
-io::Writer::Ptr
-get_doc_count(easton::Index::Ptr idx, io::Reader::Ptr reader)
-{
-    uint64_t count;
     bool v;
 
     if(!reader->read(v)) {
@@ -102,13 +76,25 @@ get_doc_count(easton::Index::Ptr idx, io::Reader::Ptr reader)
         throw EastonException("Invalid boolean for get_doc_count.");
     }
 
-    count = idx->doc_count();
+    uint64_t doc_id_num = idx->curr_docid_num();
+    uint64_t doc_count = idx->doc_count();
 
     io::Writer::Ptr writer = io::Writer::create();
 
+    // This encodes {ok, [{tag, value} | ...]}
     writer->start_tuple(2);
     writer->write("ok");
-    writer->write(count);
+    writer->start_list(2);
+
+    writer->start_tuple(2);
+    writer->write("doc_count");
+    writer->write(doc_count);
+
+    writer->start_tuple(2);
+    writer->write("doc_id_num");
+    writer->write(doc_id_num);
+
+    writer->write_empty_list();
 
     return writer;
 }
@@ -375,10 +361,8 @@ handle(easton::Index::Ptr idx, io::Reader::Ptr reader)
             return close_idx(idx, reader);
         case EASTON_COMMAND_SYNC:
             return sync_idx(idx, reader);
-        case EASTON_COMMAND_GET_DOC_ID_NUM:
-            return get_doc_id_num(idx, reader);
-        case EASTON_COMMAND_GET_DOC_COUNT:
-            return get_doc_count(idx, reader);
+        case EASTON_COMMAND_GET_INDEX_INFO:
+            return get_index_info(idx, reader);
         case EASTON_COMMAND_PUT_USER_KV:
             return put_user_kv(idx, reader);
         case EASTON_COMMAND_GET_USER_KV:

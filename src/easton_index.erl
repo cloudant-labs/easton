@@ -128,22 +128,25 @@ destroy(Directory, Opts) ->
     end.
 
 
-doc_id_num(Index) ->
-    case cmd(Index, ?EASTON_COMMAND_GET_DOC_ID_NUM, true) of
-        {ok, DocIdNum} ->
-            {ok, DocIdNum};
+info(Index) ->
+    case cmd(Index, ?EASTON_COMMAND_GET_INDEX_INFO, true) of
+        {ok, Info} ->
+            {ok, Info};
         Else ->
             throw(Else)
     end.
+
+
+doc_id_num(Index) ->
+    {ok, Info} = info(Index),
+    {_, DocIdNum} = lists:keyfind(doc_id_num, 1, Info),
+    {ok, DocIdNum}.
 
 
 doc_count(Index) ->
-    case cmd(Index, ?EASTON_COMMAND_GET_DOC_COUNT, true) of
-        {ok, DocCount} ->
-            {ok, DocCount};
-        Else ->
-            throw(Else)
-    end.
+    {ok, Info} = info(Index),
+    {_, DocCount} = lists:keyfind(doc_count, 1, Info),
+    {ok, DocCount}.
 
 
 os_pid(Index) ->
