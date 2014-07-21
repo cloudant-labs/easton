@@ -73,7 +73,8 @@ open(Directory, Opts) ->
     CsMapDir = get_cs_map_dir(Opts),
     Env = {env, [{"EASTON_CS_MAP_DIR", CsMapDir}]},
 
-    gen_server:start_link(?MODULE, {self(), Directory, [Args, Env]}, []).
+    Arg = {self(), Directory, [Args, Env]},
+    proc_lib:start_link(?MODULE, init, [Arg]).
 
 
 close(Index) ->
@@ -245,14 +246,20 @@ search(Index, Query, Opts) ->
 
 init({Parent, Directory, Opts}) ->
     erlang:monitor(process, Parent),
-    {ok, Port, OsPid} = open_index(Opts),
-    {ok, #st{
-        parent = Parent,
-        port = Port,
-        os_pid = OsPid,
-        killer = erlang:spawn(?MODULE, kill_monitor, [self(), OsPid]),
-        idx_dir = Directory
-    }}.
+    try
+        {ok, Port, OsPid} = open_index(Opts),
+        proc_lib:init_ack({ok, self()}),
+        St = #st{
+            parent = Parent,
+            port = Port,
+            os_pid = OsPid,
+            killer = erlang:spawn(?MODULE, kill_monitor, [self(), OsPid]),
+            idx_dir = Directory
+        },
+        gen_server:enter_loop(?MODULE, [], St)
+    catch throw:Error ->
+        proc_lib:init_ack(Error)
+    end.
 
 
 terminate(_Reason, St) ->
