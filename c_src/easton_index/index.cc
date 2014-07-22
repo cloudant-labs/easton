@@ -248,7 +248,7 @@ Index::create(io::Reader::Ptr reader)
     std::string dir;
     int64_t type = -1;
     int64_t dims = -1;
-    int64_t srid = -1;
+    geo::SRID::Ptr srid;
 
     for(int32_t i = 0; i < arity; i++) {
         if(!reader->read_tuple_n(2)) {
@@ -273,7 +273,8 @@ Index::create(io::Reader::Ptr reader)
                 throw EastonException("Invalid index dimensions value.");
             }
         } else if(optname == "srid") {
-            if(!reader->read(srid)) {
+            srid = geo::SRID::from_reader(reader);
+            if(!srid) {
                 throw EastonException("Invalid index SRID value.");
             }
         } else {
@@ -297,16 +298,16 @@ Index::create(io::Reader::Ptr reader)
         throw EastonException("No index dimensions specified.");
     }
 
-    if(srid < 0) {
+    if(!srid) {
         throw EastonException("No index SRID specified.");
     }
 
 
-    return Ptr(new Index(dir, type, dims, (int32_t) srid));
+    return Ptr(new Index(dir, type, dims, srid));
 }
 
 
-Index::Index(std::string dir, int64_t type, int64_t dims, int32_t srid)
+Index::Index(std::string dir, int64_t type, int64_t dims, geo::SRID::Ptr srid)
 {
     this->db_dir = dir;
     if(!io::is_dir(this->db_dir)) {
@@ -615,7 +616,7 @@ Index::init_geo_idx(int64_t type, int64_t dims)
 
 
 void
-Index::init_srid(int32_t srid)
+Index::init_srid(geo::SRID::Ptr srid)
 {
     io::Transaction::Ptr tx = io::Transaction::autocommit(this->store);
     this->srid = srid;
@@ -629,19 +630,18 @@ Index::init_srid(int32_t srid)
         // This is the first time we've opened the index.
         // Store the SRID and call it a day.
         io::Writer::Ptr writer = io::Writer::create();
-        uint64_t u_srid = this->srid;
-        writer->write(u_srid);
+        writer->write(this->srid->c_str());
         this->store->put_kv(key, writer->serialize());
         return;
     }
 
     io::Reader::Ptr reader = io::Reader::create(val);
-    int64_t old_srid;
+    std::string old_srid;
     if(!reader->read(old_srid)) {
         throw EastonException("Error reading stored SRID.");
     }
 
-    if(this->srid != old_srid) {
+    if(this->srid->str() != old_srid) {
         throw EastonException("Invalid SRID.");
     }
 }

@@ -239,23 +239,15 @@ search_entries(easton::Index::Ptr idx, io::Reader::Ptr reader)
         throw EastonException("Invalid argument arity for search.");
     }
 
-    int64_t ctx_srid = ctx->get_srid();
-    int64_t req_srid;
-    int64_t resp_srid;
+    geo::SRID::Ptr ctx_srid = ctx->get_srid();
+    geo::SRID::Ptr req_srid = geo::SRID::from_reader(reader);
+    geo::SRID::Ptr resp_srid = geo::SRID::from_reader(reader);
 
-    if(!reader->read(req_srid)) {
-        throw EastonException("Invalid req_srid argument for search.");
-    }
-
-    if(req_srid == 0) {
+    if(!req_srid) {
         req_srid = ctx_srid;
     }
 
-    if(!reader->read(resp_srid)) {
-        throw EastonException("Invalid resp_srid argument for search.");
-    }
-
-    if(resp_srid == 0) {
+    if(!resp_srid) {
         resp_srid = ctx_srid;
     }
 

@@ -63,6 +63,25 @@ class Bounds
 };
 
 
+class SRID
+{
+    public:
+        typedef std::shared_ptr<SRID> Ptr;
+
+        static Ptr LL();
+        static Ptr from_reader(io::Reader::Ptr reader);
+
+        std::string str();
+        const char* c_str();
+
+    private:
+        SRID(const char* name);
+        SRID(const SRID& other);
+
+        std::string name;
+};
+
+
 class Geom
 {
     public:
@@ -88,7 +107,7 @@ class Geom
         Ptr get_envelope();
         Ptr get_exterior_ring();
 
-        Ptr reproject(int32_t src_srid, int32_t tgt_srid);
+        Ptr reproject(SRID::Ptr src, SRID::Ptr tgt);
 
         Bounds::Ptr get_bounds();
 
@@ -194,17 +213,17 @@ class Ctx: public std::enable_shared_from_this<Ctx>
     public:
         typedef std::shared_ptr<Ctx> Ptr;
 
-        static Ptr create(uint32_t dimensions, int32_t srid);
+        static Ptr create(uint32_t dimensions, SRID::Ptr srid);
         ~Ctx();
 
-        int32_t get_srid();
+        SRID::Ptr get_srid();
 
         GeomFilter make_filter(Geom::Ptr geom, uint64_t filter);
 
-        Geom::Ptr geom_from_reader(io::Reader::Ptr reader, int32_t srid);
+        Geom::Ptr geom_from_reader(io::Reader::Ptr reader, SRID::Ptr srid);
 
-        Geom::Ptr from_wkb(io::Bytes::Ptr wkb, int32_t srid);
-        Geom::Ptr from_wkt(io::Bytes::Ptr wkt, int32_t srid);
+        Geom::Ptr from_wkb(io::Bytes::Ptr wkb, SRID::Ptr srid);
+        Geom::Ptr from_wkt(io::Bytes::Ptr wkt, SRID::Ptr srid);
 
         Geom::Ptr from_wkb(io::Bytes::Ptr wkb);
         Geom::Ptr from_wkt(io::Bytes::Ptr wkt);
@@ -212,21 +231,21 @@ class Ctx: public std::enable_shared_from_this<Ctx>
         Geom::Ptr make_point(
                 double x,
                 double y,
-                int32_t srid
+                SRID::Ptr srid
             );
 
         Geom::Ptr make_rectangle(
                 double* mins,
                 double* maxs,
                 uint32_t dimensions,
-                int32_t srid
+                SRID::Ptr srid
             );
 
         Geom::Ptr make_circle(
                 double x,
                 double y,
                 double r,
-                int32_t srid
+                SRID::Ptr srid
             );
 
         Geom::Ptr make_ellipse(
@@ -234,12 +253,12 @@ class Ctx: public std::enable_shared_from_this<Ctx>
                 double y,
                 double x_range,
                 double y_range,
-                int32_t srid
+                SRID::Ptr srid
             );
 
     private:
         Ctx();
-        Ctx(uint32_t dimensions, int32_t srid);
+        Ctx(uint32_t dimensions, SRID::Ptr srid);
         Ctx(const Ctx& other);
 
         GeomRO::Ptr wrap(const GEOSGeometry* g);
@@ -261,7 +280,7 @@ class Ctx: public std::enable_shared_from_this<Ctx>
             );
 
         uint32_t dimensions;
-        int32_t srid;
+        SRID::Ptr srid;
         GEOSCtx ctx;
 
         friend class Geom;

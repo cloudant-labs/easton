@@ -118,14 +118,14 @@ class Index
 
     private:
         Index();
-        Index(std::string dir, int64_t type, int64_t dims, int32_t srid);
+        Index(std::string dir, int64_t type, int64_t dims, geo::SRID::Ptr srid);
         Index(const Index& other);
 
         void remove_int(io::Bytes::Ptr docid);
 
         void init_storage();
         void init_geo_idx(int64_t type, int64_t dims);
-        void init_srid(int32_t srid);
+        void init_srid(geo::SRID::Ptr srid);
         void load_index_id();
         void store_index_id();
 
@@ -147,7 +147,7 @@ class Index
         IndexH geo_idx;
         geo::Ctx::Ptr geo_ctx;
 
-        int32_t srid;
+        geo::SRID::Ptr srid;
 
         io::Bytes::Ptr docid_num_key;
 

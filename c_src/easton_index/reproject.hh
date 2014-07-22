@@ -20,13 +20,9 @@ NS_EASTON_GEO_BEGIN
 
 
 GEOSGeometry* reproject(GEOSCtx c,
-        const GEOSGeometry* g, int src_srid, int tgt_srid);
+        const GEOSGeometry* g, SRID::Ptr src_srid, SRID::Ptr tgt_srid);
 
-bool reproject(int32_t src_srid, int32_t tgt_srid, double xyzm[4]);
-bool reproject(int32_t src_srid, const char* tgt_name, double xyzm[4]);
-bool reproject(const char* src_name, int32_t tgt_srid, double xyzm[4]);
-bool reproject(const char* src_name, const char* tgt_name, double xyzm[4]);
-
+bool reproject(SRID::Ptr src, SRID::Ptr tgt, double xyzm[4]);
 
 NS_EASTON_GEO_END
 NS_EASTON_END

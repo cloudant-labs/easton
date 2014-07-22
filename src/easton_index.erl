@@ -426,11 +426,21 @@ get_index_dimensions(Opts) ->
 get_index_srid(Opts) ->
     case lists:keyfind(srid, 1, Opts) of
         {_, N} when is_integer(N), N > 0 ->
-            N;
+            {epsg, N};
+        {_, <<"urn:ogc:def:crs:EPSG::", Tail/binary>> = Val} ->
+            try
+                SRID = integer_to_list(binary_to_list(Tail)),
+                if SRID > 0 -> ok; true ->
+                    throw({error, {invalid_epsg, Val}})
+                end,
+                {epsg, 4326}
+            catch _:_ ->
+                throw({error, {invalid_srid, Val}})
+            end;
         {_, Else} ->
-            throw({invalid_index_srid, Else});
+            throw({invalid_srid, Else});
         false ->
-            4326
+            {epsg, 4326}
     end.
 
 
@@ -467,23 +477,19 @@ fmt_query(Else) ->
 
 get_req_srid(Opts) ->
     case lists:keyfind(req_srid, 1, Opts) of
-        {_, N} when is_integer(N), N >= 0 ->
-            N;
-        {_, Else} ->
-            throw({invalid_req_srid, Else});
+        {_, Value} ->
+            get_index_srid([{srid, Value}]);
         false ->
-            0
+            {epsg, 4326}
     end.
 
 
 get_resp_srid(Opts) ->
     case lists:keyfind(resp_srid, 1, Opts) of
-        {_, N} when is_integer(N), N >= 0 ->
-            N;
-        {_, Else} ->
-            throw({invalid_resp_srid, Else});
+        {_, Value} ->
+            get_index_srid([{srid, Value}]);
         false ->
-            0
+            {epsg, 4326}
     end.
 
 

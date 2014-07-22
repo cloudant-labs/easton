@@ -17,7 +17,7 @@ typedef GEOSGeometry* (GeomFromCS) (GEOSCtx, GEOSCoordSequence*);
 class Rep
 {
     public:
-        Rep(GEOSCtx c, int src_srid, int tgt_srid);
+        Rep(GEOSCtx c, SRID::Ptr src, SRID::Ptr tgt);
 
         GEOSGeometry* run(const GEOSGeometry* g);
 
@@ -31,20 +31,16 @@ class Rep
 
     private:
         GEOSCtx c;
-        int src_srid;
-        int tgt_srid;
-        const char* src_name;
-        const char* tgt_name;
+        SRID::Ptr src;
+        SRID::Ptr tgt;
 };
 
 
-Rep::Rep(GEOSCtx c, int src_srid, int tgt_srid)
+Rep::Rep(GEOSCtx c, SRID::Ptr src, SRID::Ptr tgt)
 {
     this->c = c;
-    this->src_srid = src_srid;
-    this->tgt_srid = tgt_srid;
-    this->src_name = CSepsg2adskCS(this->src_srid);
-    this->tgt_name = CSepsg2adskCS(this->tgt_srid);
+    this->src = src;
+    this->tgt = tgt;
 }
 
 
@@ -240,7 +236,7 @@ Rep::reproject(const GEOSGeometry* g, GeomFromCS gfcs)
             }
         }
 
-        if(!geo::reproject(this->src_name, this->tgt_name, xyzm)) {
+        if(!geo::reproject(this->src, this->tgt, xyzm)) {
             goto error;
         }
 
@@ -268,52 +264,28 @@ error:
 
 
 GEOSGeometry*
-reproject(GEOSCtx c, const GEOSGeometry* g, int src_srid, int tgt_srid)
+reproject(GEOSCtx c, const GEOSGeometry* g, SRID::Ptr src, SRID::Ptr tgt)
 {
-    return Rep(c, src_srid, tgt_srid).run(g);
+    return Rep(c, src, tgt).run(g);
 }
 
 
 bool
-reproject(int src_srid, int tgt_srid, double xyzm[4])
+reproject(SRID::Ptr src, SRID::Ptr tgt, double xyzm[4])
 {
-    return reproject(CSepsg2adskCS(src_srid), CSepsg2adskCS(tgt_srid), xyzm);
-}
-
-
-bool
-reproject(int src_srid, const char* tgt_name, double xyzm[4])
-{
-    return reproject(CSepsg2adskCS(src_srid), tgt_name, xyzm);
-}
-
-
-bool
-reproject(const char* src_name, int32_t tgt_srid, double xyzm[4])
-{
-    return reproject(src_name, CSepsg2adskCS(tgt_srid), xyzm);
-}
-
-
-bool
-reproject(const char* src_name, const char* tgt_name, double xyzm[4])
-{
-    if(src_name == NULL) {
-        throw EastonException("Invalid src_srid.");
+    if(!src) {
+        throw EastonException("Invalid source SRID.");
     }
 
-    if(tgt_name == NULL) {
-        throw EastonException("Invalid tgt_srid.");
+    if(!tgt) {
+        throw EastonException("Invlaid target SRID.");
     }
 
-    int slen = strlen(src_name);
-    int tlen = strlen(tgt_name);
-
-    if(slen == tlen && memcmp(src_name, tgt_name, slen) == 0) {
+    if(src->str() == tgt->str()) {
         return true;
     }
 
-    if(CS_cnvrt(src_name, tgt_name, xyzm) != 0) {
+    if(CS_cnvrt(src->c_str(), tgt->c_str(), xyzm) != 0) {
         return false;
     }
 

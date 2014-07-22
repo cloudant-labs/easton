@@ -13,6 +13,7 @@
 #include <spatialindex/capi/sidx_api.h>
 
 #include <CsMap/cs_map.h>
+#include <CsMap/csNameMapperSupport.h>
 
 #include "config.hh"
 #include "exceptions.hh"
@@ -121,6 +122,67 @@ double*
 Bounds::maxs()
 {
     return this->data.get() + this->dims;
+}
+
+
+SRID::Ptr
+SRID::LL()
+{
+    return Ptr(new SRID("LL"));
+}
+
+
+SRID::Ptr
+SRID::from_reader(io::Reader::Ptr reader)
+{
+    if(!reader->read_tuple_n(2)) {
+        throw EastonException("Invalid SRID defintion.");
+    }
+
+    std::string type;
+    if(!reader->read(type)) {
+        throw EastonException("Invalid SRID type.");
+    }
+
+    const char* name = NULL;
+
+    if(type == "epsg") {
+        uint64_t code;
+        if(!reader->read(code)) {
+            throw EastonException("Invalid EPSG code type.");
+        }
+
+        name = CSepsg2adskCS((long) code);
+
+        if(name == NULL) {
+            throw EastonException("Invalid EPSG code.");
+        }
+    }
+
+    if(name == NULL) {
+        throw EastonException("Unknown SRID type: " + type);
+    }
+
+    return Ptr(new SRID(name));
+}
+
+
+SRID::SRID(const char* name) : name(name)
+{
+}
+
+
+std::string
+SRID::str()
+{
+    return this->name;
+}
+
+
+const char*
+SRID::c_str()
+{
+    return this->name.c_str();
 }
 
 
@@ -289,13 +351,13 @@ Geom::get_exterior_ring()
 
 
 Geom::Ptr
-Geom::reproject(int32_t src_srid, int32_t tgt_srid)
+Geom::reproject(SRID::Ptr src, SRID::Ptr tgt)
 {
     return this->ctx->wrap(geo::reproject(
             this->ctx->ctx,
             this->ro_g,
-            src_srid,
-            tgt_srid
+            src,
+            tgt
         ));
 }
 
@@ -596,13 +658,13 @@ GeomFilter::operator()(Geom::Ptr other)
 
 
 Ctx::Ptr
-Ctx::create(uint32_t dimensions, int32_t srid)
+Ctx::create(uint32_t dimensions, SRID::Ptr srid)
 {
     return Ptr(new Ctx(dimensions, srid));
 }
 
 
-Ctx::Ctx(uint32_t dimensions, int32_t srid)
+Ctx::Ctx(uint32_t dimensions, SRID::Ptr srid)
 {
     this->dimensions = dimensions;
     this->srid = srid;
@@ -613,7 +675,7 @@ Ctx::Ctx(uint32_t dimensions, int32_t srid)
 }
 
 
-int32_t
+SRID::Ptr
 Ctx::get_srid()
 {
     return this->srid;
@@ -634,7 +696,7 @@ Ctx::make_filter(Geom::Ptr geom, uint64_t filter)
 
 
 Geom::Ptr
-Ctx::geom_from_reader(io::Reader::Ptr reader, int32_t srid)
+Ctx::geom_from_reader(io::Reader::Ptr reader, SRID::Ptr srid)
 {
     if(!reader->read_tuple_n(2)) {
         throw EastonException("Invalid shape tuple.");
@@ -650,7 +712,6 @@ Ctx::geom_from_reader(io::Reader::Ptr reader, int32_t srid)
         if(!wkb) {
             throw EastonException("Invalid shape data for wkb.");
         }
-        //return this->from_wkb(wkb, srid);
         return this->from_wkb(wkb, srid);
     }
 
@@ -753,11 +814,11 @@ Ctx::geom_from_reader(io::Reader::Ptr reader, int32_t srid)
 
 
 Geom::Ptr
-Ctx::from_wkb(io::Bytes::Ptr wkb, int32_t srid)
+Ctx::from_wkb(io::Bytes::Ptr wkb, SRID::Ptr srid)
 {
     Geom::Ptr ret = this->from_wkb(wkb);
 
-    if(srid != this->srid) {
+    if(srid->str() != this->srid->str()) {
         return ret->reproject(srid, this->srid);
     }
 
@@ -766,11 +827,11 @@ Ctx::from_wkb(io::Bytes::Ptr wkb, int32_t srid)
 
 
 Geom::Ptr
-Ctx::from_wkt(io::Bytes::Ptr wkt, int32_t srid)
+Ctx::from_wkt(io::Bytes::Ptr wkt, SRID::Ptr srid)
 {
     Geom::Ptr ret = this->from_wkt(wkt);
 
-    if(srid != this->srid) {
+    if(srid->str() != this->srid->str()) {
         return ret->reproject(srid, this->srid);
     }
 
@@ -819,7 +880,7 @@ Ctx::from_wkt(io::Bytes::Ptr wkt)
 
 
 Geom::Ptr
-Ctx::make_point(double x, double y, int32_t srid)
+Ctx::make_point(double x, double y, SRID::Ptr srid)
 {
     GEOSCoordSequence* cs = GEOSCoordSeq_create_r(
             this->ctx, 1, this->dimensions);
@@ -846,7 +907,7 @@ Ctx::make_point(double x, double y, int32_t srid)
         throw EastonException("Error creating geometry for point.");
     }
 
-    if(srid != this->srid) {
+    if(srid->str() != this->srid->str()) {
         return p->reproject(srid, this->srid);
     }
 
@@ -855,7 +916,7 @@ Ctx::make_point(double x, double y, int32_t srid)
 
 
 Geom::Ptr
-Ctx::make_rectangle(double* mins, double* maxs, uint32_t dims, int32_t srid)
+Ctx::make_rectangle(double* mins, double* maxs, uint32_t dims, SRID::Ptr srid)
 {
     GEOSCoordSequence* cs = GEOSCoordSeq_create_r(
             this->ctx, 2, this->dimensions);
@@ -896,7 +957,7 @@ Ctx::make_rectangle(double* mins, double* maxs, uint32_t dims, int32_t srid)
         throw EastonException("Eror creating bbox.");
     }
 
-    if(srid != this->srid) {
+    if(srid->str() != this->srid->str()) {
         return bbox->reproject(srid, this->srid);
     }
 
@@ -905,7 +966,7 @@ Ctx::make_rectangle(double* mins, double* maxs, uint32_t dims, int32_t srid)
 
 
 Geom::Ptr
-Ctx::make_circle(double x, double y, double r, int32_t srid)
+Ctx::make_circle(double x, double y, double r, SRID::Ptr srid)
 {
     // A circle with a zero-radius is a point. For some
     // reason the regular circle generation returns an
@@ -937,7 +998,7 @@ Ctx::make_circle(double x, double y, double r, int32_t srid)
     // Then convert to the LL coordinate system. I'm guessing
     // this is to guarantee that we have a known ellipsoid
     // to perform our calculations on.
-    if(!reproject(this->srid, "LL", xyz)) {
+    if(!reproject(this->srid, SRID::LL(), xyz)) {
         throw EastonException("Error reprojecting to LL system.");
     }
 
@@ -970,11 +1031,11 @@ Ctx::make_circle(double x, double y, double r, int32_t srid)
 
     // Now convert both of our coordinates back to the
     // index's srid so we can create the circle.
-    if(!reproject("LL", this->srid, xyz)) {
+    if(!reproject(SRID::LL(), this->srid, xyz)) {
         throw EastonException("Error reprojecting circle center from LL.");
     }
 
-    if(!reproject("LL", this->srid, azdd_xyz)) {
+    if(!reproject(SRID::LL(), this->srid, azdd_xyz)) {
         throw EastonException("Error reprojecting circumference point from LL");
     }
 
@@ -1047,7 +1108,7 @@ done:
 
 Geom::Ptr
 Ctx::make_ellipse(double x, double y, double x_range, double y_range,
-        int32_t srid)
+        SRID::Ptr srid)
 {
     // An ellipse with zero length axes is a point.
     if(x_range == 0.0 && y_range == 0.0) {
@@ -1074,7 +1135,7 @@ Ctx::make_ellipse(double x, double y, double x_range, double y_range,
         throw EastonException("Error reprojecting index system.");
     }
 
-    if(!reproject(this->srid, "LL", xyz)) {
+    if(!reproject(this->srid, SRID::LL(), xyz)) {
         throw EastonException("Error reprojecting to LL system.");
     }
 
@@ -1100,15 +1161,15 @@ Ctx::make_ellipse(double x, double y, double x_range, double y_range,
         throw EastonException("Error calculating the LL XYZ point.");
     }
 
-    if(!reproject("LL", this->srid, xyz)) {
+    if(!reproject(SRID::LL(), this->srid, xyz)) {
         throw EastonException("Error reprojecting ellipse center from LL.");
     }
 
-    if(!reproject("LL", this->srid, azdd_xyz_x)) {
+    if(!reproject(SRID::LL(), this->srid, azdd_xyz_x)) {
         throw EastonException("Error reprojecting x_range point from LL");
     }
 
-    if(!reproject("LL", this->srid, azdd_xyz_y)) {
+    if(!reproject(SRID::LL(), this->srid, azdd_xyz_y)) {
         throw EastonException("Error reprojecting y_range point from LL.");
     }
 
