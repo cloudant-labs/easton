@@ -39,6 +39,13 @@ get_storage(const void* context)
 
 
 void
+sm_flush_cb(const void* context, int* err)
+{
+    *err = CSM::NoError;
+}
+
+
+void
 sm_load_cb(const void* context,
         const int64_t id, uint32_t* len, uint8_t** data, int* err)
 {
@@ -616,6 +623,7 @@ Storage::Storage(std::string dirname)
     }
 
     this->sm.context = (void*) this;
+    this->sm.flushCallback = sm_flush_cb;
     this->sm.loadByteArrayCallback = sm_load_cb;
     this->sm.storeByteArrayCallback = sm_store_cb;
     this->sm.deleteByteArrayCallback = sm_delete_cb;
