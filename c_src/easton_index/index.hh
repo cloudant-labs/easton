@@ -97,7 +97,7 @@ class Index
     public:
         typedef std::shared_ptr<Index> Ptr;
 
-        static Ptr create(int argc, const char* argv[]);
+        static Ptr create(io::Reader::Ptr reader);
         ~Index();
 
         void sync();
@@ -118,14 +118,14 @@ class Index
 
     private:
         Index();
-        Index(int argc, const char* argv[]);
+        Index(std::string dir, int64_t type, int64_t dims, int32_t srid);
         Index(const Index& other);
 
         void remove_int(io::Bytes::Ptr docid);
 
         void init_storage();
-        void init_geo_idx(int argc, const char* argv[]);
-        void init_srid(const char* srid_str);
+        void init_geo_idx(int64_t type, int64_t dims);
+        void init_srid(int32_t srid);
         void load_index_id();
         void store_index_id();
 

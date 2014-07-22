@@ -15,32 +15,81 @@ using namespace easton;
 
 
 void
-run(int argc, const char* argv[])
+run(io::Reader::Ptr opts)
+{
+    io::Reader::Ptr r;
+    io::Writer::Ptr w;
+
+    easton::Index::Ptr idx = easton::Index::create(opts);
+
+    w = io::Writer::create();
+    w->write("ok");
+    w->send();
+
+    while((r = io::Reader::recv())) {
+        try {
+            w = cmd::handle(idx, r);
+            w->send();
+        } catch(EastonExit& e) {
+            exit(e.code);
+        } catch(std::exception& e) {
+            w = io::Writer::create();
+            w->start_tuple(2);
+            w->write("error");
+            w->write(io::Bytes::proxy(e.what()));
+            w->send();
+        }
+    }
+
+    exit(0);
+}
+
+
+void
+destroy(io::Reader::Ptr reader)
+{
+    std::string dir;
+    if(!reader->read(dir)) {
+        throw EastonException("Invalid index directory for destroy.");
+    }
+
+    io::Writer::Ptr w = io::Writer::create();
+    w->write("ok");
+    w->send();
+
+    leveldb::Options opts;
+    leveldb::Status s = leveldb::DestroyDB(dir, opts);
+    if(!s.ok()) {
+        throw EastonException("Error destroying index: " + s.ToString());
+    }
+}
+
+
+int
+main(int argc, const char* argv[])
 {
     try {
+
         init();
 
-        io::Reader::Ptr r;
-        io::Writer::Ptr w;
+        io::Reader::Ptr reader = io::Reader::recv();
 
-        easton::Index::Ptr idx = easton::Index::create(argc, argv);
-
-        while((r = io::Reader::recv())) {
-            try {
-                w = cmd::handle(idx, r);
-                w->send();
-            } catch(EastonExit& e) {
-                exit(e.code);
-            } catch(std::exception& e) {
-                w = io::Writer::create();
-                w->start_tuple(2);
-                w->write("error");
-                w->write(io::Bytes::proxy(e.what()));
-                w->send();
-            }
+        if(!reader->read_tuple_n(2)) {
+            throw EastonException("Invalid command tuple.");
         }
 
-        exit(0);
+        std::string cmd;
+        if(!reader->read(cmd)) {
+            throw EastonException("Invalid index command.");
+        }
+
+        if(cmd == "run") {
+            run(reader);
+        } else if(cmd == "destroy") {
+            destroy(reader);
+        } else {
+            throw EastonException("Unknown index command: " + cmd);
+        }
 
     } catch(std::exception& e) {
         fprintf(stderr, "ERROR: %s\r\n", e.what());
@@ -48,45 +97,5 @@ run(int argc, const char* argv[])
     } catch(...) {
         fprintf(stderr, "UNKNOWN ERROR\r\n");
         show_stack(255);
-    }
-}
-
-
-void
-destroy(int argc, const char* argv[])
-{
-    if(argc != 1) {
-        fprintf(stderr, "No index directory specified.\r\n");
-        exit(-1);
-    }
-
-    init();
-
-    leveldb::Options opts;
-    leveldb::Status s = leveldb::DestroyDB(argv[0], opts);
-    if(!s.ok()) {
-        fprintf(stderr, "Error destroying index: %s", s.ToString().c_str());
-        exit(-1);
-    }
-
-    exit(EASTON_OK);
-}
-
-
-int
-main(int argc, const char* argv[])
-{
-    if(argc < 2) {
-        fprintf(stderr, "usage: %s action [args...]\r\n", argv[0]);
-        exit(-1);
-    }
-
-    std::string action = argv[1];
-    if(action == "run") {
-        run(argc - 2, argv + 2);
-    } else if(action == "destroy") {
-        destroy(argc - 2, argv + 2);
-    } else {
-        fprintf(stderr, "Invalid action: %s\r\n", action.c_str());
     }
 }

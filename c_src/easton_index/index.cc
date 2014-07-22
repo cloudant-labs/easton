@@ -238,26 +238,84 @@ EntryVisitor::visitData(std::vector<const SpatialIndex::IData*>& v)
 
 
 Index::Ptr
-Index::create(int argc, const char* argv[])
+Index::create(io::Reader::Ptr reader)
 {
-    return Index::Ptr(new Index(argc, argv));
+    int32_t arity;
+    if(!reader->read_list(arity)) {
+        throw EastonException("Invalid index options.");
+    }
+
+    std::string dir;
+    int64_t type = -1;
+    int64_t dims = -1;
+    int64_t srid = -1;
+
+    for(int32_t i = 0; i < arity; i++) {
+        if(!reader->read_tuple_n(2)) {
+            throw EastonException("Invalid index option tuple.");
+        }
+
+        std::string optname;
+        if(!reader->read(optname)) {
+            throw EastonException("Invalid index option name.");
+        }
+
+        if(optname == "index_directory") {
+            if(!reader->read(dir)) {
+                throw EastonException("Invalid index directory value.");
+            }
+        } else if(optname == "index_type") {
+            if(!reader->read(type)) {
+                throw EastonException("Invalid index type value.");
+            }
+        } else if(optname == "dimensions") {
+            if(!reader->read(dims)) {
+                throw EastonException("Invalid index dimensions value.");
+            }
+        } else if(optname == "srid") {
+            if(!reader->read(srid)) {
+                throw EastonException("Invalid index SRID value.");
+            }
+        } else {
+            throw EastonException("Unknown index option: " + optname);
+        }
+    }
+
+    if(!reader->read_empty_list()) {
+        throw EastonException("Improper index option list.");
+    }
+
+    if(!dir.size()) {
+        throw EastonException("No index directory specified.");
+    }
+
+    if(type < 0) {
+        throw EastonException("No index type specified.");
+    }
+
+    if(dims < 0) {
+        throw EastonException("No index dimensions specified.");
+    }
+
+    if(srid < 0) {
+        throw EastonException("No index SRID specified.");
+    }
+
+
+    return Ptr(new Index(dir, type, dims, (int32_t) srid));
 }
 
 
-Index::Index(int argc, const char* argv[])
+Index::Index(std::string dir, int64_t type, int64_t dims, int32_t srid)
 {
-    if(argc < 3) {
-        throw EastonException("Not enough arguments for index creation.");
-    }
-
-    this->db_dir = argv[0];
+    this->db_dir = dir;
     if(!io::is_dir(this->db_dir)) {
         throw EastonException("Index directory does not exist.");
     }
 
     this->init_storage();
-    this->init_geo_idx(argc, argv);
-    this->init_srid(argv[3]);
+    this->init_geo_idx(type, dims);
+    this->init_srid(srid);
 
     this->geo_ctx = geo::Ctx::create(this->dimensions, this->srid);
 }
@@ -462,13 +520,12 @@ Index::init_storage()
 
 
 void
-Index::init_geo_idx(int argc, const char* argv[])
+Index::init_geo_idx(int64_t type, int64_t dims)
 {
+    this->geo_idx = NULL;
+
     io::Transaction::Ptr tx = io::Transaction::autocommit(this->store);
     IndexPropertyH props = IndexProperty_Create();
-
-    int64_t idx_type = atoi(argv[1]);
-    int64_t dims = atoi(argv[2]);
 
     RTIndexType it;
 
@@ -499,9 +556,9 @@ Index::init_geo_idx(int argc, const char* argv[])
         throw EastonException("Error setting write through.");
     }
 
-    if(idx_type == EASTON_INDEX_TYPE_RTREE) {
+    if(type == EASTON_INDEX_TYPE_RTREE) {
         it = RT_RTree;
-    } else if(idx_type == EASTON_INDEX_TYPE_TPRTREE) {
+    } else if(type == EASTON_INDEX_TYPE_TPRTREE) {
         it = RT_TPRTree;
     } else {
         throw EastonException("Invalid geo index type.");
@@ -558,10 +615,10 @@ Index::init_geo_idx(int argc, const char* argv[])
 
 
 void
-Index::init_srid(const char* srid_str)
+Index::init_srid(int32_t srid)
 {
     io::Transaction::Ptr tx = io::Transaction::autocommit(this->store);
-    this->srid = atoi(srid_str);
+    this->srid = srid;
 
     // Verify that we have the same SRID if we're
     // reopening the index.

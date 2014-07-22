@@ -65,15 +65,17 @@ open(Directory) ->
 open(Directory, Opts) ->
     ensure_idx_dir(Directory),
 
-    IndexType = get_index_type(Opts),
-    Dimensions = get_index_dimensions(Opts),
-    SRID = get_index_srid(Opts),
-    Args = {args, ["run", Directory, IndexType, Dimensions, SRID]},
-
     CsMapDir = get_cs_map_dir(Opts),
     Env = {env, [{"EASTON_CS_MAP_DIR", CsMapDir}]},
 
-    Arg = {self(), Directory, [Args, Env]},
+    Cmd = {run, [
+        {index_directory, iolist_to_binary(Directory)},
+        {index_type, get_index_type(Opts)},
+        {dimensions, get_index_dimensions(Opts)},
+        {srid, get_index_srid(Opts)}
+    ]},
+
+    Arg = {self(), Directory, Cmd, [Env]},
     proc_lib:start_link(?MODULE, init, [Arg]).
 
 
@@ -121,10 +123,10 @@ destroy(Directory, Opts) ->
     end,
 
     CsMapDir = get_cs_map_dir(Opts),
-    Args = {args, ["destroy", Directory]},
     Env = {env, [{"EASTON_CS_MAP_DIR", CsMapDir}]},
+    Cmd = {destroy, iolist_to_binary(Directory)},
 
-    {ok, Port, OsPid} = open_index([Args, Env]),
+    {ok, Port, OsPid} = open_index(Cmd, [Env]),
     erlang:spawn(?MODULE, kill_monitor, [self(), OsPid]),
     receive
         {Port, {exit_status, 0}} ->
@@ -244,10 +246,10 @@ search(Index, Query, Opts) ->
     end.
 
 
-init({Parent, Directory, Opts}) ->
+init({Parent, Directory, Cmd, PortOpts}) ->
     erlang:monitor(process, Parent),
     try
-        {ok, Port, OsPid} = open_index(Opts),
+        {ok, Port, OsPid} = open_index(Cmd, PortOpts),
         proc_lib:init_ack({ok, self()}),
         St = #st{
             parent = Parent,
@@ -351,21 +353,39 @@ ensure_idx_dir(Directory) ->
     end.
 
 
-open_index(Opts) ->
-    PortOpts = ?PORT_OPTS ++ Opts,
+open_index(Cmd, PortOpts0) ->
+    PortOpts = ?PORT_OPTS ++ PortOpts0,
     Port = erlang:open_port({spawn_executable, exe_name()}, PortOpts),
     receive
         {Port, {data, Bin}} ->
             case binary_to_term(Bin, [safe]) of
                 {ok, OsPid} ->
-                    {ok, Port, OsPid};
+                    init_index(Cmd, Port, OsPid);
                 Else ->
                     throw(Else)
             end;
         Else ->
             throw(Else)
     after 1000 ->
-        throw({timeout, index_open})
+        throw({timeout, open_index})
+    end.
+
+
+init_index(Cmd, Port, OsPid) ->
+    C = term_to_binary(Cmd),
+    true = erlang:port_command(Port, C),
+    receive
+        {Port, {data, Resp}} ->
+            case binary_to_term(Resp) of
+                ok ->
+                    {ok, Port, OsPid};
+                Else ->
+                    throw({error, Else})
+            end;
+        Else ->
+            throw({error, Else})
+    after 5000 ->
+            exit({timeout, Cmd})
     end.
 
 
@@ -382,36 +402,35 @@ exe_name() ->
 
 
 get_index_type(Opts) ->
-    Type = case lists:keyfind(type, 1, Opts) of
+    case lists:keyfind(type, 1, Opts) of
         {_, <<"rtree">>} -> ?EASTON_INDEX_TYPE_RTREE;
         {_, rtree} -> ?EASTON_INDEX_TYPE_RTREE;
         {_, <<"tprtree">>} -> ?EASTON_INDEX_TYPE_TPRTREE;
         {_, tprtree} -> ?EASTON_INDEX_TYPE_TPRTREE;
         {_, Else} -> throw({invalid_index_type, Else});
         false -> ?EASTON_INDEX_TYPE_RTREE
-    end,
-    integer_to_list(Type).
+    end.
 
 
 get_index_dimensions(Opts) ->
     case lists:keyfind(dimensions, 1, Opts) of
-        {_, N} when is_integer(N), N > 0 ->
-            integer_to_list(N);
+        {_, N} when N == 2 orelse N == 3 orelse N == 4 ->
+            N;
         {_, Else} ->
             throw({invalid_index_dimensions, Else});
         false ->
-            "2"
+            2
     end.
 
 
 get_index_srid(Opts) ->
     case lists:keyfind(srid, 1, Opts) of
         {_, N} when is_integer(N), N > 0 ->
-            integer_to_list(N);
+            N;
         {_, Else} ->
             throw({invalid_index_srid, Else});
         false ->
-            "4326"
+            4326
     end.
 
 
