@@ -114,6 +114,22 @@ is_dir(std::string dname)
 }
 
 
+void
+Timer::start()
+{
+    this->clock = std::clock();
+}
+
+
+void
+Timer::print(std::string prefix)
+{
+    double diff = (std::clock() - this->clock)
+            / (double) (CLOCKS_PER_SEC / 1000.0);
+    fprintf(stderr, "%s :: %0.3f ms\r\n", prefix.c_str(), diff);
+}
+
+
 Bytes::Ptr
 Bytes::create(uint32_t len)
 {

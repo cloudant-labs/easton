@@ -2,6 +2,7 @@
 #ifndef EASTON_IO_HH
 #define EASTON_IO_HH
 
+#include <ctime>
 #include <string>
 #include <unordered_map>
 
@@ -24,6 +25,17 @@ NS_EASTON_IO_BEGIN
 
 
 bool is_dir(std::string dname);
+
+
+class Timer
+{
+    public:
+        void start();
+        void print(std::string prefix);
+
+    private:
+        std::clock_t clock;
+};
 
 
 class Bytes
