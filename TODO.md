@@ -1,8 +1,7 @@
-Index Arguments
-===============
+Temporal API
+============
 
-Make the command line parsing not suck so bad. Or alternatively pass all the arguments of stdin...
-
+I need to re-add the TPR-Tree code back.
 
 Index Dimensions
 ================
