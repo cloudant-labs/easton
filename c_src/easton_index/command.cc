@@ -185,21 +185,22 @@ update_entry(easton::Index::Ptr idx, io::Reader::Ptr reader)
         throw EastonException("Invalid docid for update_entry.");
     }
 
-    int32_t num_wkbs;
-    if(!reader->read_list(num_wkbs)) {
+    int32_t num_entries;
+    if(!reader->read_list(num_entries)) {
         throw EastonException("Invalid WKB list for update_entry.");
     }
 
-    io::Bytes::Vector wkbs;
-    for(int32_t i = 0; i < num_wkbs; i++) {
-        io::Bytes::Ptr wkb = reader->read_bytes();
-        if(!wkb) {
-            throw EastonException("Invalid WKB in update_entry.");
-        }
-        wkbs.push_back(wkb);
+    Entry::Vector entries;
+    for(int32_t i = 0; i < num_entries; i++) {
+        Entry::Ptr e = idx->get_reader()->read_update(reader);
+        entries.push_back(e);
     }
 
-    idx->update(docid, wkbs);
+    if(!reader->read_empty_list()) {
+        throw EastonException("Improper entry list for update.");
+    }
+
+    idx->update(docid, entries);
 
     io::Writer::Ptr writer = io::Writer::create();
     writer->write("ok");
@@ -242,6 +243,7 @@ search_entries(easton::Index::Ptr idx, io::Reader::Ptr reader)
     geo::SRID::Ptr ctx_srid = ctx->get_srid();
     geo::SRID::Ptr req_srid = geo::SRID::from_reader(reader);
     geo::SRID::Ptr resp_srid = geo::SRID::from_reader(reader);
+    Entry::Ptr entry = idx->get_reader()->read_query(reader, req_srid);
 
     if(!req_srid) {
         req_srid = ctx_srid;
@@ -251,13 +253,8 @@ search_entries(easton::Index::Ptr idx, io::Reader::Ptr reader)
         resp_srid = ctx_srid;
     }
 
-    geo::Geom::Ptr search = ctx->geom_from_reader(reader, req_srid);
-    if(!search) {
+    if(!entry) {
         throw EastonException("Invalid query argument for search.");
-    }
-
-    if(search->is_empty()) {
-        throw EastonException("Unable to search with an empty geometry.");
     }
 
     uint64_t filter;
@@ -296,11 +293,10 @@ search_entries(easton::Index::Ptr idx, io::Reader::Ptr reader)
         throw EastonException("Invalid list for search argument.");
     }
 
-    geo::GeomFilter filtobj = ctx->make_filter(search, filter);
+    geo::GeomFilter filtobj = entry->make_filter(ctx, filter);
     TopHits collector(bookmark, filtobj, limit);
-    geo::Bounds::Ptr bounds = search->get_bounds();
 
-    idx->search(collector, bounds, nearest);
+    idx->search(collector, entry, nearest);
 
     // Reverse and maybe reproject the hits
     std::unique_ptr<Hit[]> results(new Hit[collector.size()]);

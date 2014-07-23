@@ -161,9 +161,295 @@ TopHits::pop()
 }
 
 
-NNComparator::NNComparator(geo::Ctx::Ptr ctx, TopHits& hits) : hits(hits)
+Entry::~Entry()
+{
+}
+
+
+Entry::Ptr
+SpatialEntry::read_id(io::Reader::Ptr reader)
+{
+    geo::Bounds::Ptr bounds = geo::Bounds::read(reader);
+
+    return Entry::Ptr(new SpatialEntry(bounds));
+}
+
+
+Entry::Ptr
+SpatialEntry::read_geo(io::Reader::Ptr reader, geo::Ctx::Ptr ctx,
+    io::Bytes::Ptr& docid)
+{
+    if(!reader->read_tuple_n(2)) {
+        throw EastonException("Error reading spatial entry geo tuple.");
+    }
+
+    docid = reader->read_bytes();
+    if(!docid) {
+        throw EastonException("Error reading doc id from geo spatial entry.");
+    }
+
+    io::Bytes::Ptr wkb = reader->read_bytes();
+    if(!wkb) {
+        throw EastonException("Error reading wkb from geo spatial entry.");
+    }
+
+    geo::Geom::Ptr geom = ctx->from_wkb(wkb);
+    if(!geom) {
+        throw EastonException("Error creating geometry from spatial entry.");
+    }
+
+    return Entry::Ptr(new SpatialEntry(wkb, geom));
+}
+
+
+Entry::Ptr
+SpatialEntry::read_update(io::Reader::Ptr reader, geo::Ctx::Ptr ctx)
+{
+    io::Bytes::Ptr wkb = reader->read_bytes();
+    if(!wkb) {
+        throw EastonException("Error reading WKB.");
+    }
+
+    geo::Geom::Ptr geom = ctx->from_wkb(wkb);
+    if(!geom) {
+        throw EastonException("Error getting geometry from WKB.");
+    }
+
+    return Entry::Ptr(new SpatialEntry(wkb, geom));
+}
+
+
+Entry::Ptr
+SpatialEntry::read_query(io::Reader::Ptr reader, geo::Ctx::Ptr ctx,
+        geo::SRID::Ptr srid)
+{
+    geo::Geom::Ptr geom = ctx->geom_from_reader(reader, srid);
+    if(!geom) {
+        throw EastonException("Error reading query geometry.");
+    }
+
+    return Entry::Ptr(new SpatialEntry(NULL, geom));
+}
+
+
+SpatialEntry::SpatialEntry(io::Bytes::Ptr wkb, geo::Geom::Ptr geom)
+{
+    this->wkb = wkb;
+    this->geom = geom;
+
+    this->bbox = this->geom->get_bounds();
+    if(!this->bbox) {
+        throw EastonException("Error getting bounds from geometry.");
+    }
+}
+
+
+SpatialEntry::SpatialEntry(geo::Bounds::Ptr bbox)
+{
+    this->bbox = bbox;
+}
+
+
+SpatialEntry::~SpatialEntry()
+{
+}
+
+
+void
+SpatialEntry::write_id(io::Writer::Ptr writer)
+{
+    if(!this->bbox) {
+        throw EastonException("Invalid spatial entry ID serialization.");
+    }
+
+    this->bbox->write(writer);
+}
+
+
+void
+SpatialEntry::write_geo(io::Bytes::Ptr docid, io::Writer::Ptr writer)
+{
+    if(!this->wkb) {
+        throw EastonException("Invaldi spatial entry for geo serialization.");
+    }
+
+    writer->start_tuple(2);
+    writer->write(docid);
+    writer->write(wkb);
+}
+
+
+void
+SpatialEntry::update(Index* idx, io::Bytes::Ptr docid,
+        uint64_t docnum, uint64_t dimensions)
+{
+    if(!this->wkb) {
+        throw EastonException("Invalid spatial entry wkb for index update.");
+    }
+
+    if(!this->bbox) {
+        throw EastonException("Invalid spatial entry bbox for index update.");
+    }
+
+    if(dimensions != this->bbox->get_dims()) {
+        throw EastonException("Invalid spatial entry bbox dimensions.");
+    }
+
+    // Create the value for the geo entry
+    io::Writer::Ptr writer = io::Writer::create();
+    writer->start_tuple(2);
+    writer->write(docid);
+    writer->write(this->wkb);
+    io::Bytes::Ptr val = writer->serialize();
+
+    if(Index_InsertData(
+                idx->get_index(),
+                docnum,
+                this->bbox->mins(),
+                this->bbox->maxs(),
+                this->bbox->get_dims(),
+                val->get(),
+                val->size()
+            ) != RT_None) {
+        throw EastonException("Error inserting spatial entry.");
+    }
+}
+
+
+void
+SpatialEntry::remove(Index* idx, uint64_t docnum, uint64_t dimensions)
+{
+    if(!this->bbox) {
+        throw EastonException("Invalid spatial entry for removal.");
+    }
+
+    if(dimensions != this->bbox->get_dims()) {
+        throw EastonException("Invalid spatial entry bbox dimensions.");
+    }
+
+    if(Index_DeleteData(
+                idx->get_index(),
+                docnum,
+                this->bbox->mins(),
+                this->bbox->maxs(),
+                this->bbox->get_dims()
+            ) != RT_None) {
+        throw EastonException("Error removing spatial entry.");
+    }
+}
+
+
+void
+SpatialEntry::search(Index* idx, TopHits& collector, bool nearest)
+{
+    ::Index* index = static_cast<::Index*>(idx->get_index());
+
+    SpatialIndex::Region r(
+            this->bbox->mins(),
+            this->bbox->maxs(),
+            this->bbox->get_dims()
+        );
+
+    EntryVisitor visitor(idx->get_geo_ctx(), idx->get_reader(), collector);
+
+    if(nearest) {
+        NNComparator nnc(idx->get_geo_ctx(), idx->get_reader(), collector);
+        index->index().nearestNeighborQuery(collector.limit, r, visitor, nnc);
+    } else {
+        index->index().intersectsWithQuery(r, visitor);
+    }
+}
+
+
+geo::Geom::Ptr
+SpatialEntry::get_geometry()
+{
+    if(!this->geom) {
+        throw EastonException("Invalid spatial entry has no geometry.");
+    }
+
+    return this->geom;
+}
+
+
+geo::GeomFilter
+SpatialEntry::make_filter(geo::Ctx::Ptr ctx, uint64_t filter)
+{
+    if(!this->geom) {
+        throw EastonException("Invalid spatial entry has no geometry.");
+    }
+
+    return ctx->make_filter(this->geom, filter);
+}
+
+
+EntryReader::Ptr
+EntryReader::create(geo::Ctx::Ptr ctx, int64_t index_type)
+{
+   return Ptr(new EntryReader(ctx, index_type));
+}
+
+
+EntryReader::EntryReader(geo::Ctx::Ptr ctx, int64_t index_type)
 {
     this->ctx = ctx;
+    this->index_type = index_type;
+}
+
+
+Entry::Ptr
+EntryReader::read_id(io::Reader::Ptr reader)
+{
+    switch(this->index_type) {
+        case EASTON_INDEX_TYPE_RTREE:
+            return SpatialEntry::read_id(reader);
+        default:
+            throw EastonException("Invalid index type.");
+    }
+}
+
+
+Entry::Ptr
+EntryReader::read_geo(io::Reader::Ptr reader, io::Bytes::Ptr& docid)
+{
+    switch(this->index_type) {
+        case EASTON_INDEX_TYPE_RTREE:
+            return SpatialEntry::read_geo(reader, this->ctx, docid);
+        default:
+            throw EastonException("Invalid index type.");
+    }
+}
+
+
+Entry::Ptr
+EntryReader::read_update(io::Reader::Ptr reader)
+{
+    switch(this->index_type) {
+        case EASTON_INDEX_TYPE_RTREE:
+            return SpatialEntry::read_update(reader, this->ctx);
+        default:
+            throw EastonException("Invalid index type.");
+    }
+}
+
+
+Entry::Ptr
+EntryReader::read_query(io::Reader::Ptr reader, geo::SRID::Ptr srid)
+{
+    switch(this->index_type) {
+        case EASTON_INDEX_TYPE_RTREE:
+            return SpatialEntry::read_query(reader, this->ctx, srid);
+        default:
+            throw EastonException("Invalid index type.");
+    }
+}
+
+
+NNComparator::NNComparator(geo::Ctx::Ptr ctx, EntryReader::Ptr reader,
+        TopHits& hits) : hits(hits)
+{
+    this->ctx = ctx;
+    this->reader = reader;
 }
 
 
@@ -186,18 +472,19 @@ NNComparator::getMinimumDistance(const SpatialIndex::IShape& query,
 
     io::Bytes::Ptr buf = io::Bytes::proxy(data, size);
     io::Reader::Ptr reader = io::Reader::create(buf);
-
-    io::Bytes::Ptr docid = reader->read_bytes();
-    io::Bytes::Ptr wkb = reader->read_bytes();
-    geo::Geom::Ptr geom = this->ctx->from_wkb(wkb);
+    io::Bytes::Ptr docid;
+    Entry::Ptr entry = this->reader->read_geo(reader, docid);
+    geo::Geom::Ptr geom = entry->get_geometry();
 
     return this->hits.distance(docid, geom);
 }
 
 
-EntryVisitor::EntryVisitor(geo::Ctx::Ptr ctx, TopHits& hits) : hits(hits)
+EntryVisitor::EntryVisitor(geo::Ctx::Ptr ctx, EntryReader::Ptr reader,
+        TopHits& hits) : hits(hits)
 {
     this->ctx = ctx;
+    this->reader = reader;
 }
 
 
@@ -222,10 +509,9 @@ EntryVisitor::visitData(const SpatialIndex::IData& d)
 
     io::Bytes::Ptr buf = io::Bytes::proxy(data, size);
     io::Reader::Ptr reader = io::Reader::create(buf);
-
-    io::Bytes::Ptr docid = reader->read_bytes();
-    io::Bytes::Ptr wkb = reader->read_bytes();
-    geo::Geom::Ptr geom = this->ctx->from_wkb(wkb);
+    io::Bytes::Ptr docid;
+    Entry::Ptr entry = this->reader->read_geo(reader, docid);
+    geo::Geom::Ptr geom = entry->get_geometry();
 
     this->hits.push(docid, geom);
 }
@@ -319,6 +605,7 @@ Index::Index(std::string dir, int64_t type, int64_t dims, geo::SRID::Ptr srid)
     this->init_srid(srid);
 
     this->geo_ctx = geo::Ctx::create(this->dimensions, this->srid);
+    this->reader = EntryReader::create(this->geo_ctx, type);
 }
 
 
@@ -336,10 +623,24 @@ Index::sync()
 }
 
 
+IndexH
+Index::get_index()
+{
+    return this->geo_idx;
+}
+
+
 geo::Ctx::Ptr
 Index::get_geo_ctx()
 {
     return this->geo_ctx;
+}
+
+
+EntryReader::Ptr
+Index::get_reader()
+{
+    return this->reader;
 }
 
 
@@ -405,7 +706,7 @@ Index::del_kv(io::Bytes::Ptr user_key)
 
 
 void
-Index::update(io::Bytes::Ptr docid, io::Bytes::Vector wkbs)
+Index::update(io::Bytes::Ptr docid, Entry::Vector entries)
 {
     io::Transaction::Ptr tx = io::Transaction::open(this->store);
     io::Bytes::Ptr dockey = this->store->make_key("docid", docid);
@@ -414,32 +715,25 @@ Index::update(io::Bytes::Ptr docid, io::Bytes::Vector wkbs)
     // this docid.
     this->remove_int(docid);
 
+    // Write our ID info to the index.
+
+    io::Writer::Ptr writer = io::Writer::create();
     uint64_t docnum = this->get_docid_num(dockey);
-    geo::Bounds::Vector bounds;
+    uint64_t num_entries = entries.size();
 
-    for(io::Bytes::VIter vi = wkbs.begin(); vi != wkbs.end(); vi++) {
-        geo::Geom::Ptr geom = this->geo_ctx->from_wkb(*vi);
-        if(!geom) {
-            throw EastonException("Invalid WKB in update.");
-        }
-        geo::Bounds::Ptr b = geom->get_bounds();
-        if(b->get_dims() != this->dimensions) {
-            throw EastonException("Attempted to index mismatched dimensions.");
-        }
-        bounds.push_back(b);
+    writer->start_tuple(2);
+    writer->write(docnum);
+    writer->start_list(num_entries);
+    for(uint64_t i = 0; i < num_entries; i++) {
+        entries.at(i)->write_id(writer);
     }
+    writer->write_empty_list();
 
-    io::Bytes::Ptr val = this->make_id_value(docnum, bounds);
+    io::Bytes::Ptr val = writer->serialize();
     this->store->put_kv(dockey, val);
 
-    for(uint32_t i = 0; i < wkbs.size(); i++) {
-        val = this->make_geo_value(docid, wkbs[i]);
-
-        if(Index_InsertData(this->geo_idx, docnum,
-                bounds[i]->mins(), bounds[i]->maxs(),
-                this->dimensions, val->get(), val->size()) != RT_None) {
-            throw EastonException("Error updating geo index.");
-        }
+    for(uint32_t i = 0; i < entries.size(); i++) {
+        entries.at(i)->update(this, docid, docnum, this->dimensions);
     }
 
     tx->commit();
@@ -465,14 +759,24 @@ Index::remove_int(io::Bytes::Ptr docid)
         return;
     }
 
-    geo::Bounds::Vector bounds;
-    uint64_t docnum = this->read_id_value(val, bounds);
+    io::Reader::Ptr reader = io::Reader::create(val);
+    if(!reader->read_tuple_n(2)) {
+        throw EastonException("Error reading id entry.");
+    }
 
-    for(geo::Bounds::VIter vi = bounds.begin(); vi != bounds.end(); vi++) {
-        if(Index_DeleteData(this->geo_idx, docnum, (*vi)->mins(), (*vi)->maxs(),
-                this->dimensions) != RT_None) {
-            throw EastonException("Error removing document.");
-        }
+    uint64_t docnum;
+    if(!reader->read(docnum)) {
+        throw EastonException("Error reading id doc number.");
+    }
+
+    int32_t num_entries;
+    if(!reader->read_list(num_entries)) {
+        throw EastonException("Error reading id entry list.");
+    }
+
+    for(int32_t i = 0; i < num_entries; i++) {
+        Entry::Ptr e = this->reader->read_id(reader);
+        e->remove(this, docnum, this->dimensions);
     }
 
     this->store->del_kv(dockey);
@@ -480,21 +784,10 @@ Index::remove_int(io::Bytes::Ptr docid)
 
 
 void
-Index::search(TopHits& collector, geo::Bounds::Ptr query, bool nearest)
+Index::search(TopHits& collector, Entry::Ptr entry, bool nearest)
 {
-    ::Index* idx = static_cast<::Index*>(this->geo_idx);
-    EntryVisitor visitor(this->geo_ctx, collector);
-    uint32_t lim = collector.limit;
-
     try {
-        SpatialIndex::Region r(query->mins(), query->maxs(), query->get_dims());
-
-        if(nearest) {
-            NNComparator nnc(this->geo_ctx, collector);
-            idx->index().nearestNeighborQuery(lim, r, visitor, nnc);
-        } else {
-            idx->index().intersectsWithQuery(r, visitor);
-        }
+        entry->search(this, collector, nearest);
     } catch(Tools::Exception& e) {
         throw IndexException("Search error: " + e.what());
     }
@@ -657,6 +950,9 @@ Index::get_docid_num(io::Bytes::Ptr docid_key)
         ret = this->docid_num++;
     } else {
         io::Reader::Ptr reader = io::Reader::create(val);
+        if(!reader->read_tuple_n(2)) {
+            throw EastonException("Unable to read id entry tuple.");
+        }
         if(!reader->read(ret)) {
             throw EastonException("Unable to read existing document number.");
         }
@@ -669,96 +965,6 @@ Index::get_docid_num(io::Bytes::Ptr docid_key)
     this->store->put_kv(this->docid_num_key, val);
 
     return ret;
-}
-
-
-io::Bytes::Ptr
-Index::make_id_value(uint64_t docnum, geo::Bounds::Vector bounds)
-{
-    io::Writer::Ptr writer = io::Writer::create();
-
-    writer->write(docnum);
-    writer->write((uint64_t) bounds.size());
-
-    for(uint32_t i = 0; i < bounds.size(); i++) {
-        for(uint32_t j = 0; j < this->dimensions; j++) {
-            writer->write(bounds[i]->mins()[j]);
-        }
-        for(uint32_t j = 0; j < this->dimensions; j++) {
-            writer->write(bounds[i]->maxs()[j]);
-        }
-    }
-
-    return writer->serialize();
-}
-
-
-uint64_t
-Index::read_id_value(io::Bytes::Ptr value, geo::Bounds::Vector& bounds)
-{
-    io::Reader::Ptr reader = io::Reader::create(value);
-    uint64_t docnum;
-    uint64_t num_bounds;
-    double dbl;
-
-    if(!reader->read(docnum)) {
-        throw EastonException("Error reading id index value: docnum");
-    }
-
-    if(!reader->read(num_bounds)) {
-        throw EastonException("Error reading id index value: num_bounds");
-    }
-
-    bounds.clear();
-
-    for(uint64_t i = 0; i < num_bounds; i++) {
-        geo::Bounds::Ptr b = geo::Bounds::create(this->dimensions);
-        for(uint32_t j = 0; j < this->dimensions; j++) {
-            if(!reader->read(dbl)) {
-                throw EastonException("Error reading id index value: bounds");
-            }
-            b->set_min(j, dbl);
-        }
-        for(uint32_t j = 0; j < this->dimensions; j++) {
-            if(!reader->read(dbl)) {
-                throw EastonException("Error reading id index value: bounds");
-            }
-            b->set_max(j, dbl);
-        }
-        bounds.push_back(b);
-    }
-
-    return docnum;
-}
-
-
-io::Bytes::Ptr
-Index::make_geo_value(io::Bytes::Ptr docid, io::Bytes::Ptr wkb)
-{
-    io::Writer::Ptr writer = io::Writer::create();
-
-    writer->write(docid);
-    writer->write(wkb);
-
-    return writer->serialize();
-}
-
-
-void
-Index::read_geo_value(IndexItemH item,
-        io::Bytes::Ptr& docid, io::Bytes::Ptr& wkb)
-{
-    uint8_t* data;
-    uint64_t len;
-
-    if(IndexItem_GetData(item, (uint8_t **) &data, &len) != RT_None) {
-        throw EastonException("Error getting data from geo index entry.");
-    }
-
-    io::Reader::Ptr reader = io::Reader::create(io::Bytes::create(data, len));
-
-    docid = reader->read_bytes();
-    wkb = reader->read_bytes();
 }
 
 

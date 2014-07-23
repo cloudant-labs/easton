@@ -17,6 +17,9 @@ using namespace easton;
 NS_EASTON_BEGIN
 
 
+class Index;
+
+
 class Hit
 {
     public:
@@ -57,10 +60,92 @@ class TopHits
 };
 
 
+class Entry
+{
+    public:
+        typedef std::shared_ptr<Entry> Ptr;
+        typedef std::vector<Ptr> Vector;
+        typedef std::vector<Ptr>::iterator VIter;
+
+        virtual ~Entry() = 0;
+
+        virtual void write_id(io::Writer::Ptr writer) = 0;
+        virtual void write_geo(io::Bytes::Ptr docid,
+                io::Writer::Ptr writer) = 0;
+
+        virtual void update(Index* idx, io::Bytes::Ptr docid,
+                uint64_t docnum, uint64_t dims) = 0;
+        virtual void remove(Index* idx, uint64_t docnum, uint64_t dims) = 0;
+        virtual void search(Index* idx, TopHits& collector, bool nearest) = 0;
+
+        virtual geo::Geom::Ptr get_geometry() = 0;
+        virtual geo::GeomFilter make_filter(geo::Ctx::Ptr ctx,
+                uint64_t filter) = 0;
+};
+
+
+class SpatialEntry: public Entry
+{
+    public:
+        static Entry::Ptr read_id(io::Reader::Ptr reader);
+        static Entry::Ptr read_geo(io::Reader::Ptr reader,
+                geo::Ctx::Ptr ctx, io::Bytes::Ptr& docid);
+        static Entry::Ptr read_update(io::Reader::Ptr reader,
+                geo::Ctx::Ptr ctx);
+        static Entry::Ptr read_query(io::Reader::Ptr reader,
+                geo::Ctx::Ptr ctx, geo::SRID::Ptr srid);
+
+        virtual ~SpatialEntry();
+
+        virtual void write_id(io::Writer::Ptr writer);
+        virtual void write_geo(io::Bytes::Ptr docid, io::Writer::Ptr writer);
+
+        virtual void update(Index* idx, io::Bytes::Ptr docid,
+                uint64_t docnum, uint64_t dims);
+        virtual void remove(Index* idx, uint64_t docnum, uint64_t dims);
+        virtual void search(Index* idx, TopHits& collector, bool nearest);
+
+        virtual geo::Geom::Ptr get_geometry();
+        virtual geo::GeomFilter make_filter(geo::Ctx::Ptr ctx, uint64_t filter);
+
+    private:
+        SpatialEntry();
+        SpatialEntry(io::Bytes::Ptr wkb, geo::Geom::Ptr geom);
+        SpatialEntry(geo::Bounds::Ptr bbx);
+        SpatialEntry(const SpatialEntry& other);
+
+        io::Bytes::Ptr wkb;
+        geo::Geom::Ptr geom;
+        geo::Bounds::Ptr bbox;
+};
+
+
+class EntryReader
+{
+    public:
+        typedef std::shared_ptr<EntryReader> Ptr;
+
+        static Ptr create(geo::Ctx::Ptr ctx, int64_t index_type);
+
+        Entry::Ptr read_id(io::Reader::Ptr reader);
+        Entry::Ptr read_geo(io::Reader::Ptr reader, io::Bytes::Ptr& docid);
+        Entry::Ptr read_update(io::Reader::Ptr reader);
+        Entry::Ptr read_query(io::Reader::Ptr reader, geo::SRID::Ptr srid);
+
+    private:
+        EntryReader();
+        EntryReader(geo::Ctx::Ptr ctx, int64_t index_type);
+        EntryReader(const EntryReader& other);
+
+        geo::Ctx::Ptr ctx;
+        int64_t index_type;
+};
+
+
 class NNComparator: public SpatialIndex::INearestNeighborComparator
 {
     public:
-        NNComparator(geo::Ctx::Ptr ctx, TopHits& hits);
+        NNComparator(geo::Ctx::Ptr ctx, EntryReader::Ptr reader, TopHits& hits);
 
         double getMinimumDistance(
                 const SpatialIndex::IShape& query,
@@ -73,6 +158,7 @@ class NNComparator: public SpatialIndex::INearestNeighborComparator
             );
 
         geo::Ctx::Ptr ctx;
+        EntryReader::Ptr reader;
         TopHits& hits;
 };
 
@@ -80,7 +166,7 @@ class NNComparator: public SpatialIndex::INearestNeighborComparator
 class EntryVisitor: public SpatialIndex::IVisitor
 {
     public:
-        EntryVisitor(geo::Ctx::Ptr ctx, TopHits& hits);
+        EntryVisitor(geo::Ctx::Ptr ctx, EntryReader::Ptr reader, TopHits& hits);
         ~EntryVisitor();
 
         void visitNode(const SpatialIndex::INode& n);
@@ -88,6 +174,7 @@ class EntryVisitor: public SpatialIndex::IVisitor
         void visitData(std::vector<const SpatialIndex::IData*>& v);
 
         geo::Ctx::Ptr ctx;
+        EntryReader::Ptr reader;
         TopHits& hits;
 };
 
@@ -102,7 +189,9 @@ class Index
 
         void sync();
 
+        IndexH get_index();
         geo::Ctx::Ptr get_geo_ctx();
+        EntryReader::Ptr get_reader();
 
         uint64_t curr_docid_num();
         uint64_t doc_count();
@@ -112,9 +201,9 @@ class Index
         io::Bytes::Ptr get_kv(io::Bytes::Ptr key);
         void del_kv(io::Bytes::Ptr key);
 
-        void update(io::Bytes::Ptr docid, io::Bytes::Vector wkbs);
+        void update(io::Bytes::Ptr docid, Entry::Vector entries);
         void remove(io::Bytes::Ptr docid);
-        void search(TopHits& collector, geo::Bounds::Ptr bounds, bool nearest);
+        void search(TopHits& collector, Entry::Ptr query, bool nearest);
 
     private:
         Index();
@@ -131,21 +220,12 @@ class Index
 
         uint64_t get_docid_num(io::Bytes::Ptr docid);
 
-        io::Bytes::Ptr make_id_value(
-                uint64_t docnum, geo::Bounds::Vector bounds);
-        uint64_t read_id_value(
-                io::Bytes::Ptr data, geo::Bounds::Vector& bounds);
-
-        io::Bytes::Ptr make_geo_value(
-                io::Bytes::Ptr docid, io::Bytes::Ptr wkb);
-        void read_geo_value(IndexItemH item,
-                io::Bytes::Ptr& docid, io::Bytes::Ptr& wkb);
-
         std::string db_dir;
 
         io::Storage::Ptr store;
         IndexH geo_idx;
         geo::Ctx::Ptr geo_ctx;
+        EntryReader::Ptr reader;
 
         geo::SRID::Ptr srid;
 

@@ -40,7 +40,10 @@ class Bounds
         typedef std::unique_ptr<double[]> DimsPtr;
 
         static Ptr create(uint32_t dims);
+        static Ptr read(io::Reader::Ptr reader);
         ~Bounds();
+
+        void write(io::Writer::Ptr writer);
 
         void set_min(uint32_t dim, double val);
         void set_max(uint32_t dim, double val);

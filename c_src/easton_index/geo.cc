@@ -56,6 +56,44 @@ Bounds::create(uint32_t dims)
 }
 
 
+Bounds::Ptr
+Bounds::read(io::Reader::Ptr reader)
+{
+    int32_t points;
+    if(!reader->read_list(points)) {
+        throw EastonException("Error reading bounds");
+    }
+
+    if(points != 4 && points != 6 && points != 8) {
+        throw EastonException("Invalid bounds dimensions.");
+    }
+
+    uint32_t dims = (uint32_t) (points / 2);
+    Bounds::Ptr ret = Bounds::create(dims);
+
+    double v;
+    for(int32_t i = 0; i < dims; i++) {
+        if(!reader->read(v)) {
+            throw EastonException("Invalid bounds min value.");
+        }
+        ret->set_min(i, v);
+    }
+
+    for(int32_t i = 0; i < dims; i++) {
+        if(!reader->read(v)) {
+            throw EastonException("Invalid bounds max value.");
+        }
+        ret->set_max(i, v);
+    }
+
+    if(!reader->read_empty_list()) {
+        throw EastonException("Improper bounds list.");
+    }
+
+    return ret;
+}
+
+
 Bounds::Bounds(uint32_t dims)
 {
     this->dims = dims;
@@ -69,6 +107,17 @@ Bounds::Bounds(uint32_t dims)
 
 Bounds::~Bounds()
 {
+}
+
+
+void
+Bounds::write(io::Writer::Ptr writer)
+{
+    writer->start_list(this->dims * 2);
+    for(uint32_t i = 0; i < dims * 2; i++) {
+        writer->write(this->data[i]);
+    }
+    writer->write_empty_list();
 }
 
 
