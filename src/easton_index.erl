@@ -206,7 +206,7 @@ update(Index, DocId, {_Props} = Geometry) ->
     update(Index, DocId, [Geometry]);
 
 update(Index, DocId, Geometries) ->
-    WKBs = [easton_geojson:to_wkb(G) || G <- Geometries],
+    WKBs = lists:map(fun fmt_update/1, Geometries),
     case cmd(Index, ?EASTON_COMMAND_UPDATE_ENTRIES, {DocId, WKBs}) of
         ok ->
             ok;
@@ -232,7 +232,7 @@ search(Index, Query, Opts) ->
     Arg = [
         get_req_srid(Opts),
         get_resp_srid(Opts),
-        fmt_query(Query),
+        fmt_query(Query, Opts),
         get_filter(Opts),
         get_nearest(Opts),
         get_limit(Opts),
@@ -459,6 +459,56 @@ get_cs_map_dir(Opts) ->
     end.
 
 
+fmt_update({Props} = GeoJson) ->
+    WKB = easton_geojson:to_wkb(GeoJson),
+    case get_temporal_values(Props) of
+        false ->
+            WKB;
+        Opts ->
+            {WKB, Opts}
+    end.
+
+
+get_temporal_values(Props) ->
+    VBox = lists:keyfind(<<"vbox">>, 1, Props),
+    LowV = lists:keyfind(<<"lowV">>, 1, Props),
+    HighV = lists:keyfind(<<"highV">>, 1, Props),
+
+    Velocities = case {VBox, LowV, HighV} of
+        {false, false, false} ->
+            false;
+        {false, _, _} when is_list(LowV), is_list(HighV) ->
+            if length(LowV) == length(HighV) -> ok; true ->
+                throw({error, mismatched_velocity_options})
+            end,
+            LowV ++ HighV;
+        {_, false, false} when is_list(VBox) ->
+            VBox;
+        _ ->
+            throw({error, invalid_velocity_options})
+    end,
+
+    StartTime = lists:keyfind(<<"start">>, 1, Props),
+    EndTime = lists:keyfind(<<"end">>, 1, Props),
+
+    case {StartTime, EndTime, Velocities} of
+        {false, false, false} ->
+            false;
+        Else ->
+            Else
+    end.
+
+
+fmt_query(Geom, Opts) ->
+    Shape = fmt_query(Geom),
+    case get_temporal_opts(Opts) of
+        false ->
+            Shape;
+        Opts ->
+            {Shape, Opts}
+    end.
+
+
 fmt_query({_}=GeoJson) ->
     {wkb, easton_geojson:to_wkb(GeoJson)};
 fmt_query(<<E:8/integer, _/binary>> = WKB) when E == 0 orelse E == 1 ->
@@ -490,6 +540,18 @@ get_resp_srid(Opts) ->
             get_index_srid([{srid, Value}]);
         false ->
             {epsg, 4326}
+    end.
+
+
+get_temporal_opts(Opts) ->
+    StartTime = lists:keyfind(t_start, 1, Opts),
+    EndTime = lists:keyfind(t_end, 1, Opts),
+    VBox = lists:keyfind(vbox, 1, Opts),
+    case {StartTime, EndTime, VBox} of
+        {false, false, false} ->
+            false;
+        Else ->
+            Else
     end.
 
 
