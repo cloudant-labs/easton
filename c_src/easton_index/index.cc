@@ -603,6 +603,7 @@ Index::Index(std::string dir, int64_t type, int64_t dims, geo::SRID::Ptr srid)
     this->init_storage();
     this->init_geo_idx(type, dims);
     this->init_srid(srid);
+    this->init_counts();
 
     this->geo_ctx = geo::Ctx::create(this->dimensions, this->srid);
     this->reader = EntryReader::create(this->geo_ctx, type);
@@ -652,23 +653,16 @@ Index::curr_docid_num()
 
 
 uint64_t
-Index::doc_count()
+Index::get_doc_count()
 {
-    double mins[this->dimensions];
-    double maxs[this->dimensions];
-    uint64_t n;
+    return this->doc_count;
+}
 
-    for(uint32_t i = 0; i < this->dimensions; i++) {
-        mins[i] = -DBL_MAX;
-        maxs[i] = DBL_MAX;
-    }
 
-    if(Index_Intersects_count(this->geo_idx,
-            mins, maxs, this->dimensions, &n) != RT_None) {
-        return UINT64_MAX;
-    }
-
-    return n;
+uint64_t
+Index::get_geom_count()
+{
+    return this->geom_count;
 }
 
 
@@ -736,6 +730,11 @@ Index::update(io::Bytes::Ptr docid, Entry::Vector entries)
         entries.at(i)->update(this, docid, docnum, this->dimensions);
     }
 
+    this->doc_count += 1;
+    this->geom_count += entries.size();
+
+    this->store_counts();
+
     tx->commit();
 }
 
@@ -745,6 +744,7 @@ Index::remove(io::Bytes::Ptr docid)
 {
     io::Transaction::Ptr tx = io::Transaction::open(this->store);
     this->remove_int(docid);
+    this->store_counts();
     tx->commit();
 }
 
@@ -780,6 +780,8 @@ Index::remove_int(io::Bytes::Ptr docid)
     }
 
     this->store->del_kv(dockey);
+    this->doc_count -= 1;
+    this->geom_count -= num_entries;
 }
 
 
@@ -940,6 +942,35 @@ Index::init_srid(geo::SRID::Ptr srid)
 }
 
 
+void
+Index::init_counts()
+{
+    io::Bytes::Ptr key = this->store->make_key("meta", "counts");
+    io::Bytes::Ptr val = this->store->get_kv(key);
+
+    if(!val) {
+        // This is the first time we've opened the index.
+        this->doc_count = 0;
+        this->geom_count = 0;
+        return;
+    }
+
+    io::Reader::Ptr reader = io::Reader::create(val);
+
+    if(!reader->read_tuple_n(2)) {
+        throw EastonException("Invalid index counts value.");
+    }
+
+    if(!reader->read(this->doc_count)) {
+        throw EastonException("Error reading stored document count.");
+    }
+
+    if(!reader->read(this->geom_count)) {
+        throw EastonException("Error reading stored geometry count.");
+    }
+}
+
+
 uint64_t
 Index::get_docid_num(io::Bytes::Ptr docid_key)
 {
@@ -991,6 +1022,19 @@ Index::store_index_id()
     io::Bytes::Ptr key = this->store->make_key("meta", "index_id");
     io::Writer::Ptr writer = io::Writer::create();
     writer->write(this->index_id);
+    this->store->put_kv(key, writer->serialize());
+}
+
+
+void
+Index::store_counts()
+{
+    io::Bytes::Ptr key = this->store->make_key("meta", "counts");
+
+    io::Writer::Ptr writer = io::Writer::create();
+    writer->start_tuple(2);
+    writer->write(this->doc_count);
+    writer->write(this->geom_count);
     this->store->put_kv(key, writer->serialize());
 }
 

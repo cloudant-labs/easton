@@ -194,7 +194,8 @@ class Index
         EntryReader::Ptr get_reader();
 
         uint64_t curr_docid_num();
-        uint64_t doc_count();
+        uint64_t get_doc_count();
+        uint64_t get_geom_count();
         uint64_t data_size();
 
         void put_kv(io::Bytes::Ptr key, io::Bytes::Ptr val);
@@ -215,8 +216,10 @@ class Index
         void init_storage();
         void init_geo_idx(int64_t type, int64_t dims);
         void init_srid(geo::SRID::Ptr srid);
+        void init_counts();
         void load_index_id();
         void store_index_id();
+        void store_counts();
 
         uint64_t get_docid_num(io::Bytes::Ptr docid);
 
@@ -234,6 +237,9 @@ class Index
         uint64_t dimensions;
         uint64_t docid_num;
         int64_t index_id;
+
+        uint64_t doc_count;
+        uint64_t geom_count;
 };
 
 

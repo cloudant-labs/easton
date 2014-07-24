@@ -77,7 +77,8 @@ get_index_info(easton::Index::Ptr idx, io::Reader::Ptr reader)
     }
 
     uint64_t doc_id_num = idx->curr_docid_num();
-    uint64_t doc_count = idx->doc_count();
+    uint64_t doc_count = idx->get_doc_count();
+    uint64_t geom_count = idx->get_geom_count();
     uint64_t data_size = idx->data_size();
 
     io::Writer::Ptr writer = io::Writer::create();
@@ -86,7 +87,7 @@ get_index_info(easton::Index::Ptr idx, io::Reader::Ptr reader)
     writer->start_tuple(2);
     writer->write("ok");
 
-    writer->start_list(3);
+    writer->start_list(4);
 
     writer->start_tuple(2);
     writer->write("data_size");
@@ -95,6 +96,10 @@ get_index_info(easton::Index::Ptr idx, io::Reader::Ptr reader)
     writer->start_tuple(2);
     writer->write("doc_count");
     writer->write(doc_count);
+
+    writer->start_tuple(2);
+    writer->write("geom_count");
+    writer->write(geom_count);
 
     writer->start_tuple(2);
     writer->write("doc_id_num");

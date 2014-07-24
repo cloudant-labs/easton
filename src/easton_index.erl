@@ -18,6 +18,7 @@
     info/1,
     doc_id_num/1,
     doc_count/1,
+    geom_count/1,
     os_pid/1,
 
     update/3,
@@ -158,6 +159,12 @@ doc_count(Index) ->
     {ok, Info} = info(Index),
     {_, DocCount} = lists:keyfind(doc_count, 1, Info),
     {ok, DocCount}.
+
+
+geom_count(Index) ->
+    {ok, Info} = info(Index),
+    {_, GeomCount} = lists:keyfind(geom_count, 1, Info),
+    {ok, GeomCount}.
 
 
 os_pid(Index) ->
