@@ -70,8 +70,6 @@ class Entry
         virtual ~Entry() = 0;
 
         virtual void write_id(io::Writer::Ptr writer) = 0;
-        virtual void write_geo(io::Bytes::Ptr docid,
-                io::Writer::Ptr writer) = 0;
 
         virtual void update(Index* idx, io::Bytes::Ptr docid,
                 uint64_t docnum, uint64_t dims) = 0;
@@ -98,7 +96,6 @@ class SpatialEntry: public Entry
         virtual ~SpatialEntry();
 
         virtual void write_id(io::Writer::Ptr writer);
-        virtual void write_geo(io::Bytes::Ptr docid, io::Writer::Ptr writer);
 
         virtual void update(Index* idx, io::Bytes::Ptr docid,
                 uint64_t docnum, uint64_t dims);

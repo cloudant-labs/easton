@@ -267,19 +267,6 @@ SpatialEntry::write_id(io::Writer::Ptr writer)
 
 
 void
-SpatialEntry::write_geo(io::Bytes::Ptr docid, io::Writer::Ptr writer)
-{
-    if(!this->wkb) {
-        throw EastonException("Invaldi spatial entry for geo serialization.");
-    }
-
-    writer->start_tuple(2);
-    writer->write(docid);
-    writer->write(wkb);
-}
-
-
-void
 SpatialEntry::update(Index* idx, io::Bytes::Ptr docid,
         uint64_t docnum, uint64_t dimensions)
 {
