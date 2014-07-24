@@ -1,12 +1,15 @@
 
 #include <execinfo.h>
 #include <signal.h>
+#include <string.h>
 #include <unistd.h>
 #include <arpa/inet.h>
 
 #include <CsMap/cs_map.h>
+#include <CsMap/csNameMapperSupport.h>
 
 #include "config.hh"
+#include "epsg.hh"
 #include "init.hh"
 #include "io.hh"
 
@@ -76,11 +79,53 @@ init_csmap()
 
 
 void
+maybe_check_epsg_table()
+{
+    const char* do_check = getenv("EASTON_CHECK_EPSG_TABLE");
+    if(do_check == NULL) {
+        return;
+    }
+
+    std::string check(do_check);
+    if(check == "" || check == "0" || check == "false") {
+        return;
+    }
+
+    fprintf(stderr, "Checking Easton EPSG tables.\r\n");
+
+    bool error = false;
+
+    for(uint64_t i = EASTON_EPSG_MIN; i <= EASTON_EPSG_MAX; i++) {
+        const char* easton_name = easton_epsg_lookup(i);
+        if(easton_name == NULL) {
+            continue;
+        }
+
+        const char* csmap_name = CSepsg2adskCS((long) i);
+        if(csmap_name == NULL) {
+            continue;
+        }
+
+        if(strcmp(easton_name, csmap_name) != 0) {
+            fprintf(stderr, "INVALID EPSG NAME: %llu %s != %s\r\n",
+                    i, easton_name, csmap_name);
+            error = true;
+        }
+    }
+
+    if(error) {
+        exit(254);
+    }
+}
+
+
+void
 init()
 {
     init_signals();
     report_pid();
     init_csmap();
+    maybe_check_epsg_table();
 }
 
 

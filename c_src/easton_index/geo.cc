@@ -16,6 +16,7 @@
 #include <CsMap/csNameMapperSupport.h>
 
 #include "config.hh"
+#include "epsg.hh"
 #include "exceptions.hh"
 #include "geo.hh"
 #include "reproject.hh"
@@ -226,7 +227,15 @@ SRID::from_reader(io::Reader::Ptr reader)
             throw EastonException("Invalid EPSG code type.");
         }
 
-        name = CSepsg2adskCS((long) code);
+        // Try using our custom EPSG table before
+        // falling back to the CsMap implementation.
+        // This saves us about 1.5s on the first access
+        // and 0.3ms every time after.
+        name = easton_epsg_lookup(code);
+
+        if(name == NULL) {
+            name = CSepsg2adskCS((long) code);
+        }
 
         if(name == NULL) {
             throw EastonException("Invalid EPSG code.");
