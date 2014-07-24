@@ -1,8 +1,3 @@
-Temporal API
-============
-
-I need to re-add the TPR-Tree code back.
-
 Index Dimensions
 ================
 
