@@ -27,23 +27,23 @@ is_os_pid_alive(OsPid) ->
 
 
 open_close_test() ->
-    {ok, Idx} = open_index(),
-    ?assert(is_pid(Idx)),
+    {ok, {_IdxType, IdxPid} = Idx} = open_index(),
+    ?assertEqual(true, is_pid(IdxPid)),
     OsPid = easton_index:os_pid(Idx),
     ?assertEqual(true, is_os_pid_alive(OsPid)),
     ok = easton_index:close(Idx),
-    ?assertEqual(false, is_process_alive(Idx)),
+    ?assertEqual(false, is_process_alive(IdxPid)),
     ?assertEqual(false, is_os_pid_alive(OsPid)).
 
 
 open_close_sync_test() ->
-    {ok, Idx} = open_index(),
-    ?assert(is_pid(Idx)),
+    {ok, {_IdxType, IdxPid} = Idx} = open_index(),
+    ?assert(is_pid(IdxPid)),
     OsPid = easton_index:os_pid(Idx),
     ?assertEqual(true, is_os_pid_alive(OsPid)),
     ok = easton_index:sync(Idx),
     ok = easton_index:close(Idx),
-    ?assertEqual(false, is_process_alive(Idx)),
+    ?assertEqual(false, is_process_alive(IdxPid)),
     ?assertEqual(false, is_os_pid_alive(OsPid)).
 
 
@@ -52,13 +52,13 @@ persistance_test() ->
     Point = easton_shapes:point(0.0, 0.0),
 
     % Open an index and store a point
-    {ok, Idx1} = open_index(),
+    {ok, {_IdxType1, IdxPid1} = Idx1} = open_index(),
     OsPid1 = easton_index:os_pid(Idx1),
     ?assertEqual(true, is_os_pid_alive(OsPid1)),
     ok = easton_index:update(Idx1, Id, Point),
     ?assertEqual({ok, [{Id, 0.0}]}, easton_index:search(Idx1, Point)),
     ok = easton_index:close(Idx1),
-    ?assertEqual(false, is_process_alive(Idx1)),
+    ?assertEqual(false, is_process_alive(IdxPid1)),
     ?assertEqual(false, is_os_pid_alive(OsPid1)),
 
     % Reopen the index and see if the point

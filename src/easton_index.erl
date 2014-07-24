@@ -77,10 +77,15 @@ open(Directory, Opts) ->
     ]},
 
     Arg = {self(), Directory, Cmd, [Env]},
-    proc_lib:start_link(?MODULE, init, [Arg]).
+    case proc_lib:start_link(?MODULE, init, [Arg]) of
+        {ok, Pid} ->
+            {ok, {get_index_type_name(Opts), Pid}};
+        Else ->
+            Else
+    end.
 
 
-close(Index) ->
+close({_IndexType, Index}) ->
     Ref = erlang:monitor(process, Index),
     case gen_server:call(Index, close) of
         BinResp when is_binary(BinResp) ->
@@ -102,7 +107,7 @@ close(Index) ->
     end.
 
 
-sync(Index) ->
+sync({_IndexType, Index}) ->
     case cmd(Index, ?EASTON_COMMAND_SYNC, true) of
         {ok, true} ->
             ok;
@@ -139,7 +144,7 @@ destroy(Directory, Opts) ->
     end.
 
 
-info(Index) ->
+info({_IndexType, Index}) ->
     case cmd(Index, ?EASTON_COMMAND_GET_INDEX_INFO, true) of
         {ok, Info} ->
             DiskSize = get_disk_size(Index),
@@ -149,29 +154,29 @@ info(Index) ->
     end.
 
 
-doc_id_num(Index) ->
-    {ok, Info} = info(Index),
+doc_id_num(IndexInfo) ->
+    {ok, Info} = info(IndexInfo),
     {_, DocIdNum} = lists:keyfind(doc_id_num, 1, Info),
     {ok, DocIdNum}.
 
 
-doc_count(Index) ->
-    {ok, Info} = info(Index),
+doc_count(IndexInfo) ->
+    {ok, Info} = info(IndexInfo),
     {_, DocCount} = lists:keyfind(doc_count, 1, Info),
     {ok, DocCount}.
 
 
-geom_count(Index) ->
-    {ok, Info} = info(Index),
+geom_count(IndexInfo) ->
+    {ok, Info} = info(IndexInfo),
     {_, GeomCount} = lists:keyfind(geom_count, 1, Info),
     {ok, GeomCount}.
 
 
-os_pid(Index) ->
+os_pid({_IndexType, Index}) ->
     gen_server:call(Index, os_pid, infinity).
 
 
-put(Index, Key, Value) ->
+put({_IndexType, Index}, Key, Value) ->
     case cmd(Index, ?EASTON_COMMAND_PUT_USER_KV, {t2b(Key), t2b(Value)}) of
         ok ->
             ok;
@@ -180,7 +185,7 @@ put(Index, Key, Value) ->
     end.
 
 
-get(Index, Key) ->
+get({_IndexType, Index}, Key) ->
     case cmd(Index, ?EASTON_COMMAND_GET_USER_KV, t2b(Key)) of
         {ok, VBin} ->
             {Key, binary_to_term(VBin, [safe])};
@@ -191,8 +196,8 @@ get(Index, Key) ->
     end.
 
 
-get(Index, Key, Default) ->
-    case ?MODULE:get(Index, Key) of
+get(IndexInfo, Key, Default) ->
+    case ?MODULE:get(IndexInfo, Key) of
         {Key, Value} ->
             Value;
         false ->
@@ -200,7 +205,7 @@ get(Index, Key, Default) ->
     end.
 
 
-del(Index, Key) ->
+del({_IndexType, Index}, Key) ->
     case cmd(Index, ?EASTON_COMMAND_DEL_USER_KV, t2b(Key)) of
         ok ->
             ok;
@@ -209,12 +214,12 @@ del(Index, Key) ->
     end.
 
 
-update(Index, DocId, {_Props} = Geometry) ->
-    update(Index, DocId, [Geometry]);
+update(IndexInfo, DocId, {_Props} = Geometry) ->
+    update(IndexInfo, DocId, [Geometry]);
 
-update(Index, DocId, Geometries) ->
-    WKBs = lists:map(fun fmt_update/1, Geometries),
-    case cmd(Index, ?EASTON_COMMAND_UPDATE_ENTRIES, {DocId, WKBs}) of
+update({IndexType, Index}, DocId, Geometries) ->
+    Updates = lists:map(fun(G) -> fmt_update(IndexType, G) end, Geometries),
+    case cmd(Index, ?EASTON_COMMAND_UPDATE_ENTRIES, {DocId, Updates}) of
         ok ->
             ok;
         Else ->
@@ -222,7 +227,7 @@ update(Index, DocId, Geometries) ->
     end.
 
 
-remove(Index, DocId) ->
+remove({_IndexType, Index}, DocId) ->
     case cmd(Index, ?EASTON_COMMAND_REMOVE_ENTRIES, DocId) of
         ok ->
             ok;
@@ -231,15 +236,15 @@ remove(Index, DocId) ->
     end.
 
 
-search(Index, Geometry) ->
-    search(Index, Geometry, []).
+search(IndexInfo, Geometry) ->
+    search(IndexInfo, Geometry, []).
 
 
-search(Index, Query, Opts) ->
+search({IndexType, Index}, Query, Opts) ->
     Arg = [
         get_req_srid(Opts),
         get_resp_srid(Opts),
-        fmt_query(Query, Opts),
+        fmt_query(IndexType, Query, Opts),
         get_filter(Opts),
         get_nearest(Opts),
         get_limit(Opts),
@@ -419,6 +424,17 @@ get_index_type(Opts) ->
     end.
 
 
+get_index_type_name(Opts) ->
+    case lists:keyfind(type, 1, Opts) of
+        {_, <<"rtree">>} -> rtree;
+        {_, rtree} -> rtree;
+        {_, <<"tprtree">>} -> tprtree;
+        {_, tprtree} -> tprtree;
+        {_, Else} -> throw({invalid_index_type, Else});
+        false -> rtree
+    end.
+
+
 get_index_dimensions(Opts) ->
     case lists:keyfind(dimensions, 1, Opts) of
         {_, N} when N == 2 orelse N == 3 orelse N == 4 ->
@@ -466,64 +482,69 @@ get_cs_map_dir(Opts) ->
     end.
 
 
-fmt_update({Props} = GeoJson) ->
+fmt_update(rtree, GeoJson) ->
+    easton_geojson:to_wkb(GeoJson);
+fmt_update(tprtree, {Props} = GeoJson) ->
     WKB = easton_geojson:to_wkb(GeoJson),
-    case get_temporal_values(Props) of
-        {StartTime, EndTime, false} ->
-            {WKB, StartTime, EndTime};
-        {StartTime, EndTime, VBox} ->
-            {WKB, StartTime, EndTime, VBox};
-        false ->
-            WKB
-    end.
 
+    StartTime = get_float(<<"start">>, Props),
+    if StartTime /= false -> ok; true ->
+        throw({error, invalid_start_time})
+    end,
 
-get_temporal_values(Props) ->
-    VBox = lists:keyfind(<<"vbox">>, 1, Props),
-    LowV = lists:keyfind(<<"lowV">>, 1, Props),
-    HighV = lists:keyfind(<<"highV">>, 1, Props),
+    EndTime = get_float(<<"end">>, Props),
+    if EndTime /= false -> ok; true ->
+        throw({error, invalid_end_time})
+    end,
 
-    Velocities = case {VBox, LowV, HighV} of
+    VBox0 = get_floats(<<"vbox">>, Props),
+    LowV = get_floats(<<"lowV">>, Props),
+    HighV = get_floats(<<"highV">>, Props),
+
+    VBox = case {VBox0, LowV, HighV} of
         {false, false, false} ->
             false;
-        {false, {_, LowVL}, {_, HighVL}} when is_list(LowVL), is_list(HighVL) ->
-            if length(LowVL) == length(HighVL) -> ok; true ->
+        {false, _, _} when is_list(LowV), is_list(HighV) ->
+            if length(LowV) == length(HighV) -> ok; true ->
                 throw({error, mismatched_velocity_options})
             end,
-            [float(V) || V <- LowVL ++ HighVL];
-        {{_, VBoxL}, false, false} when is_list(VBoxL) ->
-            [float(V) || V <- VBoxL];
+            LowV ++ HighV;
+        {_, false, false} when is_list(VBox0) ->
+            VBox0;
         _ ->
             throw({error, invalid_velocity_options})
     end,
 
-    StartTime = case lists:keyfind(<<"start">>, 1, Props) of
-        {_, ST} -> float(ST);
-        false -> false
-    end,
-
-    EndTime = case lists:keyfind(<<"end">>, 1, Props) of
-        {_, ET} -> float(ET);
-        false -> false
-    end,
-
-    case {StartTime, EndTime, Velocities} of
-        {false, false, false} ->
-            false;
-        Else ->
-            Else
+    case VBox of
+        false ->
+            {WKB, StartTime, EndTime};
+        _ ->
+            {WKB, StartTime, EndTime, VBox}
     end.
 
 
-fmt_query(Geom, Opts) ->
+fmt_query(rtree, Geom, _Opts) ->
+    fmt_query(Geom);
+fmt_query(tprtree, Geom, Opts) ->
     Shape = fmt_query(Geom),
-    case get_temporal_opts(Opts) of
-        {StartTime, EndTime, false} ->
-            {Shape, StartTime, EndTime};
-        {StartTime, EndTime, VBox} ->
-            {Shape, StartTime, EndTime, VBox};
+
+    StartTime = get_float(t_start, Opts),
+    if StartTime /= false -> ok; true ->
+        throw({exit, invalid_start_time})
+    end,
+
+    EndTime = get_float(t_end, Opts),
+    if EndTime /= false -> ok; true ->
+        throw({exit, invalid_end_time})
+    end,
+
+    VBox = get_floats(vbox, Opts),
+
+    case VBox of
         false ->
-            Shape
+            {Shape, StartTime, EndTime};
+        _ ->
+            {Shape, StartTime, EndTime, VBox}
     end.
 
 
@@ -558,27 +579,6 @@ get_resp_srid(Opts) ->
             get_index_srid([{srid, Value}]);
         false ->
             {epsg, 4326}
-    end.
-
-
-get_temporal_opts(Opts) ->
-    StartTime = case lists:keyfind(t_start, 1, Opts) of
-        {_, ST} -> float(ST);
-        false -> false
-    end,
-    EndTime = case lists:keyfind(t_end, 1, Opts) of
-        {_, ET} -> float(ET);
-        false -> false
-    end,
-    VBox = case lists:keyfind(vbox, 1, Opts) of
-        {_, VB} -> [float(V) || V <- VB];
-        false -> false
-    end,
-    case {StartTime, EndTime, VBox} of
-        {false, false, false} ->
-            false;
-        Else ->
-            Else
     end.
 
 
@@ -709,3 +709,27 @@ get_disk_size(Idx) ->
 
 t2b(T) ->
     term_to_binary(T, [{minor_version, 1}]).
+
+
+get_float(Name, Props) ->
+    case lists:keyfind(Name, 1, Props) of
+        {Name, Value} when is_number(Value) ->
+            float(Value);
+        _ ->
+            false
+    end.
+
+
+get_floats(Name, Props) ->
+    case lists:keyfind(Name, 1, Props) of
+        {Name, Value} when is_list(Value) ->
+            case lists:all(fun is_number/1, Value) of
+                true ->
+                    [float(V) || V <- Value];
+                false ->
+                    false
+            end;
+        _ ->
+            false
+    end.
+
