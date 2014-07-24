@@ -117,6 +117,47 @@ class SpatialEntry: public Entry
 };
 
 
+class TemporalEntry: public Entry
+{
+    public:
+        static Entry::Ptr read_id(io::Reader::Ptr reader);
+        static Entry::Ptr read_geo(io::Reader::Ptr reader,
+                geo::Ctx::Ptr ctx, io::Bytes::Ptr& docid);
+        static Entry::Ptr read_update(io::Reader::Ptr reader,
+                geo::Ctx::Ptr ctx);
+        static Entry::Ptr read_query(io::Reader::Ptr reader,
+                geo::Ctx::Ptr ctx, geo::SRID::Ptr srid);
+
+        virtual ~TemporalEntry();
+
+        virtual void write_id(io::Writer::Ptr writer);
+
+        virtual void update(Index* idx, io::Bytes::Ptr docid,
+                uint64_t docnum, uint64_t dims);
+        virtual void remove(Index* idx, uint64_t docnum, uint64_t dims);
+        virtual void search(Index* idx, TopHits& collector, bool nearest);
+
+        virtual geo::Geom::Ptr get_geometry();
+        virtual geo::GeomFilter make_filter(geo::Ctx::Ptr ctx, uint64_t filter);
+
+    private:
+        TemporalEntry();
+        TemporalEntry(io::Bytes::Ptr wkb, geo::Geom::Ptr geom);
+        TemporalEntry(io::Bytes::Ptr wkb, geo::Geom::Ptr geom,
+                geo::Bounds::Ptr vbox, double t_start, double t_end);
+        TemporalEntry(geo::Bounds::Ptr bbox, geo::Bounds::Ptr vbox,
+                double t_start, double t_end);
+        TemporalEntry(const SpatialEntry& other);
+
+        io::Bytes::Ptr wkb;
+        geo::Geom::Ptr geom;
+        geo::Bounds::Ptr bbox;
+        geo::Bounds::Ptr vbox;
+        double t_start;
+        double t_end;
+};
+
+
 class EntryReader
 {
     public:

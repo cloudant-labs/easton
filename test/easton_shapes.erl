@@ -8,6 +8,8 @@
 
 
 -export([
+    moving/5,
+
     point/0,
     linestring/0,
     polygon/0,
@@ -17,6 +19,16 @@
     multipolygon/0,
     geometrycollection/0
 ]).
+
+
+moving({ShapeProps}, LowV, HighV, StartTime, EndTime) ->
+    TemporalProps = [
+        {<<"lowV">>, LowV},
+        {<<"highV">>, HighV},
+        {<<"start">>, StartTime},
+        {<<"end">>, EndTime}
+    ],
+    {ShapeProps ++ TemporalProps}.
 
 
 point(X, Y) ->

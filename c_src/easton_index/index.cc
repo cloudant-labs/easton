@@ -370,6 +370,365 @@ SpatialEntry::make_filter(geo::Ctx::Ptr ctx, uint64_t filter)
 }
 
 
+Entry::Ptr
+TemporalEntry::read_id(io::Reader::Ptr reader)
+{
+    if(!reader->read_tuple_n(4)) {
+        throw EastonException("Invalid temporal entry id tuple.");
+    }
+
+    geo::Bounds::Ptr bbox = geo::Bounds::read(reader);
+
+    if(!bbox) {
+        throw EastonException("Invalid bbox for temporal entry id.");
+    }
+
+    geo::Bounds::Ptr vbox = geo::Bounds::read(reader);
+
+    if(!vbox) {
+        throw EastonException("Invalid vbox for temporal entry id.");
+    }
+
+    double t_start;
+    double t_end;
+
+    if(!reader->read(t_start)) {
+        throw EastonException("Invalid temporal entry id start time.");
+    }
+
+    if(!reader->read(t_end)) {
+        throw EastonException("Invalid temporal entry id end time.");
+    }
+
+    return Entry::Ptr(new TemporalEntry(bbox, vbox, t_start, t_end));
+}
+
+
+Entry::Ptr
+TemporalEntry::read_geo(io::Reader::Ptr reader, geo::Ctx::Ptr ctx,
+    io::Bytes::Ptr& docid)
+{
+    if(!reader->read_tuple_n(2)) {
+        throw EastonException("Error reading temporal entry geo tuple.");
+    }
+
+    docid = reader->read_bytes();
+    if(!docid) {
+        throw EastonException("Error reading doc id from geo temporal entry.");
+    }
+
+    io::Bytes::Ptr wkb = reader->read_bytes();
+    if(!wkb) {
+        throw EastonException("Error reading wkb from geo temporal entry.");
+    }
+
+    geo::Geom::Ptr geom = ctx->from_wkb(wkb);
+    if(!geom) {
+        throw EastonException("Error creating geometry from temporal entry.");
+    }
+
+    return Entry::Ptr(new TemporalEntry(wkb, geom));
+}
+
+
+Entry::Ptr
+TemporalEntry::read_update(io::Reader::Ptr reader, geo::Ctx::Ptr ctx)
+{
+    int32_t size;
+    if(!reader->read_tuple(size)) {
+        throw EastonException("Invalid temporal entry update tuple.");
+    }
+
+    if(size < 3 || size > 4) {
+        throw EastonException("Invaldi temporay entry update tuple size.");
+    }
+
+    io::Bytes::Ptr wkb = reader->read_bytes();
+    if(!wkb) {
+        throw EastonException("Error reading WKB.");
+    }
+
+    geo::Geom::Ptr geom = ctx->from_wkb(wkb);
+    if(!geom) {
+        throw EastonException("Error getting geometry from WKB.");
+    }
+
+    double t_start;
+    double t_end;
+
+    if(!reader->read(t_start)) {
+        throw EastonException("Error reading temporal start time.");
+    }
+
+    if(!reader->read(t_end)) {
+        throw EastonException("Erorr reading temporal end time.");
+    }
+
+    geo::Bounds::Ptr vbox;
+    if(size == 4) {
+        vbox = geo::Bounds::read(reader);
+    } else {
+        vbox = ctx->get_zero_bounds();
+    }
+
+    if(!vbox) {
+        throw EastonException("Invalid vbox for temporal index update.");
+    }
+
+    return Entry::Ptr(new TemporalEntry(wkb, geom, vbox, t_start, t_end));
+}
+
+
+Entry::Ptr
+TemporalEntry::read_query(io::Reader::Ptr reader, geo::Ctx::Ptr ctx,
+        geo::SRID::Ptr srid)
+{
+    int32_t size;
+    if(!reader->read_tuple(size)) {
+        throw EastonException("Invalid temporal index query tuple.");
+    }
+
+    if(size < 3 || size > 4) {
+        throw EastonException("Invalid temporal index tuple size.");
+    }
+
+    geo::Geom::Ptr geom = ctx->geom_from_reader(reader, srid);
+    if(!geom) {
+        throw EastonException("Error reading query geometry.");
+    }
+
+    double t_start;
+    double t_end;
+
+    if(!reader->read(t_start)) {
+        throw EastonException("Invalid temporal query start time.");
+    }
+
+    if(!reader->read(t_end)) {
+        throw EastonException("Invalid temporal query end time.");
+    }
+
+    geo::Bounds::Ptr vbox;
+    if(size == 4) {
+        vbox = geo::Bounds::read(reader);
+    } else {
+        vbox = ctx->get_zero_bounds();
+    }
+
+    if(!vbox) {
+        throw EastonException("Invalid vbox for temporal index update.");
+    }
+
+    return Entry::Ptr(new TemporalEntry(NULL, geom, vbox, t_start, t_end));
+}
+
+
+TemporalEntry::TemporalEntry(io::Bytes::Ptr wkb, geo::Geom::Ptr geom)
+{
+    this->wkb = wkb;
+    this->geom = geom;
+
+    this->bbox = this->geom->get_bounds();
+    if(!this->bbox) {
+        throw EastonException("Error getting bounds from geometry.");
+    }
+}
+
+
+TemporalEntry::TemporalEntry(io::Bytes::Ptr wkb, geo::Geom::Ptr geom,
+        geo::Bounds::Ptr vbox, double t_start, double t_end)
+{
+    this->wkb = wkb;
+    this->geom = geom;
+    this->bbox = this->geom->get_bounds();
+    this->vbox = vbox;
+    this->t_start = t_start;
+    this->t_end = t_end;
+
+    if(!this->bbox) {
+        throw EastonException("Error getting bounds from geometry.");
+    }
+}
+
+
+TemporalEntry::TemporalEntry(geo::Bounds::Ptr bbox, geo::Bounds::Ptr vbox,
+        double t_start, double t_end)
+{
+    this->bbox = bbox;
+    this->vbox = vbox;
+    this->t_start = t_start;
+    this->t_end = t_end;
+}
+
+
+TemporalEntry::~TemporalEntry()
+{
+}
+
+
+void
+TemporalEntry::write_id(io::Writer::Ptr writer)
+{
+    if(!this->bbox) {
+        throw EastonException("Invalid temporal entry bbox for id.");
+    }
+
+    if(!this->vbox) {
+        throw EastonException("Invalid temporal entry vbox for id.");
+    }
+
+    writer->start_tuple(4);
+    this->bbox->write(writer);
+    this->vbox->write(writer);
+    writer->write(this->t_start);
+    writer->write(this->t_end);
+}
+
+
+void
+TemporalEntry::update(Index* idx, io::Bytes::Ptr docid,
+        uint64_t docnum, uint64_t dimensions)
+{
+    if(!this->wkb) {
+        throw EastonException("Invalid temporal entry wkb for index update.");
+    }
+
+    if(!this->bbox) {
+        throw EastonException("Invalid temporal entry bbox for index update.");
+    }
+
+    if(!this->vbox) {
+        throw EastonException("Invalid temporal entry vbox for index update.");
+    }
+
+    if(dimensions != this->bbox->get_dims()) {
+        throw EastonException("Invalid temporal entry bbox dimensions.");
+    }
+
+    if(dimensions != this->vbox->get_dims()) {
+        throw EastonException("Invalid temporal entry vbox dimensions.");
+    }
+
+    // Create the value for the geo entry
+    io::Writer::Ptr writer = io::Writer::create();
+    writer->start_tuple(2);
+    writer->write(docid);
+    writer->write(this->wkb);
+    io::Bytes::Ptr val = writer->serialize();
+
+    if(Index_InsertTPData(
+                idx->get_index(),
+                docnum,
+                this->bbox->mins(),
+                this->bbox->maxs(),
+                this->vbox->mins(),
+                this->vbox->maxs(),
+                this->t_start,
+                this->t_end,
+                this->bbox->get_dims(),
+                val->get(),
+                val->size()
+            ) != RT_None) {
+        throw EastonException("Error inserting temporal entry.");
+    }
+}
+
+
+void
+TemporalEntry::remove(Index* idx, uint64_t docnum, uint64_t dimensions)
+{
+    if(!this->bbox) {
+        throw EastonException("Invalid temporal entry for removal.");
+    }
+
+    if(!this->vbox) {
+        throw EastonException("Invalid temporal entry for removal.");
+    }
+
+    if(dimensions != this->bbox->get_dims()) {
+        throw EastonException("Invalid temporal entry bbox dimensions.");
+    }
+
+    if(dimensions != this->vbox->get_dims()) {
+        throw EastonException("Invalid temporal entry vbox dimensions.");
+    }
+
+    if(Index_DeleteTPData(
+                idx->get_index(),
+                docnum,
+                this->bbox->mins(),
+                this->bbox->maxs(),
+                this->vbox->mins(),
+                this->vbox->maxs(),
+                this->t_start,
+                this->t_end,
+                this->bbox->get_dims()
+            ) != RT_None) {
+        throw EastonException("Error removing temporal entry.");
+    }
+}
+
+
+void
+TemporalEntry::search(Index* idx, TopHits& collector, bool nearest)
+{
+    ::Index* index = static_cast<::Index*>(idx->get_index());
+
+    if(!this->bbox) {
+        throw EastonException("Invalid temporal entry for removal.");
+    }
+
+    if(!this->vbox) {
+        throw EastonException("Invalid temporal entry for removal.");
+    }
+
+    if(this->bbox->get_dims() != this->vbox->get_dims()) {
+        throw EastonException("Invalid temporal entry bounding boxes.");
+    }
+
+    SpatialIndex::MovingRegion r(
+            this->bbox->mins(),
+            this->bbox->maxs(),
+            this->vbox->mins(),
+            this->vbox->maxs(),
+            this->t_start,
+            this->t_end,
+            this->bbox->get_dims()
+        );
+
+    EntryVisitor visitor(idx->get_geo_ctx(), idx->get_reader(), collector);
+
+    if(nearest) {
+        NNComparator nnc(idx->get_geo_ctx(), idx->get_reader(), collector);
+        index->index().nearestNeighborQuery(collector.limit, r, visitor, nnc);
+    } else {
+        index->index().intersectsWithQuery(r, visitor);
+    }
+}
+
+
+geo::Geom::Ptr
+TemporalEntry::get_geometry()
+{
+    if(!this->geom) {
+        throw EastonException("Invalid temporal entry has no geometry.");
+    }
+
+    return this->geom;
+}
+
+
+geo::GeomFilter
+TemporalEntry::make_filter(geo::Ctx::Ptr ctx, uint64_t filter)
+{
+    if(!this->geom) {
+        throw EastonException("Invalid temporal entry has no geometry.");
+    }
+
+    return ctx->make_filter(this->geom, filter);
+}
+
+
 EntryReader::Ptr
 EntryReader::create(geo::Ctx::Ptr ctx, int64_t index_type)
 {
@@ -390,6 +749,8 @@ EntryReader::read_id(io::Reader::Ptr reader)
     switch(this->index_type) {
         case EASTON_INDEX_TYPE_RTREE:
             return SpatialEntry::read_id(reader);
+        case EASTON_INDEX_TYPE_TPRTREE:
+            return TemporalEntry::read_id(reader);
         default:
             throw EastonException("Invalid index type.");
     }
@@ -402,6 +763,8 @@ EntryReader::read_geo(io::Reader::Ptr reader, io::Bytes::Ptr& docid)
     switch(this->index_type) {
         case EASTON_INDEX_TYPE_RTREE:
             return SpatialEntry::read_geo(reader, this->ctx, docid);
+        case EASTON_INDEX_TYPE_TPRTREE:
+            return TemporalEntry::read_geo(reader, this->ctx, docid);
         default:
             throw EastonException("Invalid index type.");
     }
@@ -414,6 +777,8 @@ EntryReader::read_update(io::Reader::Ptr reader)
     switch(this->index_type) {
         case EASTON_INDEX_TYPE_RTREE:
             return SpatialEntry::read_update(reader, this->ctx);
+        case EASTON_INDEX_TYPE_TPRTREE:
+            return TemporalEntry::read_update(reader, this->ctx);
         default:
             throw EastonException("Invalid index type.");
     }
@@ -426,6 +791,8 @@ EntryReader::read_query(io::Reader::Ptr reader, geo::SRID::Ptr srid)
     switch(this->index_type) {
         case EASTON_INDEX_TYPE_RTREE:
             return SpatialEntry::read_query(reader, this->ctx, srid);
+        case EASTON_INDEX_TYPE_TPRTREE:
+            return TemporalEntry::read_query(reader, this->ctx, srid);
         default:
             throw EastonException("Invalid index type.");
     }

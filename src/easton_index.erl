@@ -469,10 +469,12 @@ get_cs_map_dir(Opts) ->
 fmt_update({Props} = GeoJson) ->
     WKB = easton_geojson:to_wkb(GeoJson),
     case get_temporal_values(Props) of
+        {StartTime, EndTime, false} ->
+            {WKB, StartTime, EndTime};
+        {StartTime, EndTime, VBox} ->
+            {WKB, StartTime, EndTime, VBox};
         false ->
-            WKB;
-        Opts ->
-            {WKB, Opts}
+            WKB
     end.
 
 
@@ -484,19 +486,26 @@ get_temporal_values(Props) ->
     Velocities = case {VBox, LowV, HighV} of
         {false, false, false} ->
             false;
-        {false, _, _} when is_list(LowV), is_list(HighV) ->
-            if length(LowV) == length(HighV) -> ok; true ->
+        {false, {_, LowVL}, {_, HighVL}} when is_list(LowVL), is_list(HighVL) ->
+            if length(LowVL) == length(HighVL) -> ok; true ->
                 throw({error, mismatched_velocity_options})
             end,
-            LowV ++ HighV;
-        {_, false, false} when is_list(VBox) ->
-            VBox;
+            [float(V) || V <- LowVL ++ HighVL];
+        {{_, VBoxL}, false, false} when is_list(VBoxL) ->
+            [float(V) || V <- VBoxL];
         _ ->
             throw({error, invalid_velocity_options})
     end,
 
-    StartTime = lists:keyfind(<<"start">>, 1, Props),
-    EndTime = lists:keyfind(<<"end">>, 1, Props),
+    StartTime = case lists:keyfind(<<"start">>, 1, Props) of
+        {_, ST} -> float(ST);
+        false -> false
+    end,
+
+    EndTime = case lists:keyfind(<<"end">>, 1, Props) of
+        {_, ET} -> float(ET);
+        false -> false
+    end,
 
     case {StartTime, EndTime, Velocities} of
         {false, false, false} ->
@@ -509,10 +518,12 @@ get_temporal_values(Props) ->
 fmt_query(Geom, Opts) ->
     Shape = fmt_query(Geom),
     case get_temporal_opts(Opts) of
+        {StartTime, EndTime, false} ->
+            {Shape, StartTime, EndTime};
+        {StartTime, EndTime, VBox} ->
+            {Shape, StartTime, EndTime, VBox};
         false ->
-            Shape;
-        Opts ->
-            {Shape, Opts}
+            Shape
     end.
 
 
@@ -551,9 +562,18 @@ get_resp_srid(Opts) ->
 
 
 get_temporal_opts(Opts) ->
-    StartTime = lists:keyfind(t_start, 1, Opts),
-    EndTime = lists:keyfind(t_end, 1, Opts),
-    VBox = lists:keyfind(vbox, 1, Opts),
+    StartTime = case lists:keyfind(t_start, 1, Opts) of
+        {_, ST} -> float(ST);
+        false -> false
+    end,
+    EndTime = case lists:keyfind(t_end, 1, Opts) of
+        {_, ET} -> float(ET);
+        false -> false
+    end,
+    VBox = case lists:keyfind(vbox, 1, Opts) of
+        {_, VB} -> [float(V) || V <- VB];
+        false -> false
+    end,
     case {StartTime, EndTime, VBox} of
         {false, false, false} ->
             false;
