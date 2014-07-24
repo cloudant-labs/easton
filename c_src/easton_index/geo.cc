@@ -660,7 +660,7 @@ PrepGeom::contains_properly(Geom::Ptr subj)
 bool
 PrepGeom::covered_by(Geom::Ptr subj)
 {
-    if(GEOSPreparedCovers_r(this->ctx->ctx, this->prep, subj->ro_g) == 1) {
+    if(GEOSPreparedCoveredBy_r(this->ctx->ctx, this->prep, subj->ro_g) == 1) {
         return true;
     }
 
