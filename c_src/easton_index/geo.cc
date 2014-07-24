@@ -111,6 +111,24 @@ Bounds::~Bounds()
 
 
 void
+Bounds::expand(Bounds::Ptr other)
+{
+    if(!other) {
+        throw EastonException("Invalid bounds for expansion.");
+    }
+
+    if(other->dims != this->dims) {
+        throw EastonException("Invalid dimensions for bounds expansion.");
+    }
+
+    for(uint32_t i = 0; i < this->dims; i++) {
+        this->update_min(i, other->mins()[i]);
+        this->update_max(i, other->maxs()[i]);
+    }
+}
+
+
+void
 Bounds::write(io::Writer::Ptr writer)
 {
     writer->start_list(this->dims * 2);
@@ -414,67 +432,24 @@ Geom::reproject(SRID::Ptr src, SRID::Ptr tgt)
 Bounds::Ptr
 Geom::get_bounds()
 {
-    Geom::Ptr env = this->get_envelope();
-    if(!env) {
-        return NULL;
-    }
-
-    // We have to be careful with ring here to make
-    // sure it stays alive as long as we have a
-    // handle to its coordinate sequence.
-    Geom::Ptr ring;
-    const GEOSCoordSequence* coords;
-
-    uint32_t ncoords;
-    switch(env->get_type()) {
+    switch(GEOSGeomTypeId_r(this->ctx->ctx, this->ro_g)) {
         case GEOS_POINT:
-            coords = GEOSGeom_getCoordSeq_r(this->ctx->ctx, env->ro_g);
-            ncoords = 1;
-            break;
+            return this->get_bounds_simple();
+        case GEOS_LINESTRING:
+            return this->get_bounds_simple();
+        case GEOS_LINEARRING:
+            return this->get_bounds_simple();
         case GEOS_POLYGON:
-            ring = env->get_exterior_ring();
-            ncoords = (uint32_t) GEOSGetNumCoordinates_r(
-                    this->ctx->ctx, ring->ro_g);
-            coords = ring->get_coords();
-            break;
+            return this->get_bounds_polygon();
+        case GEOS_MULTIPOINT:
+        case GEOS_MULTILINESTRING:
+        case GEOS_MULTIPOLYGON:
+        case GEOS_GEOMETRYCOLLECTION:
+            return this->get_bounds_collection();
         default:
-            throw EastonException("Invalid envelope type in get_bounds.");
-    }
-
-    uint32_t dims;
-    if(!GEOSCoordSeq_getDimensions_r(this->ctx->ctx, coords, &dims)) {
-        return NULL;
-    }
-
-    Bounds::Ptr ret = Bounds::create(dims);
-
-    // Initialize our bounds based on the first
-    // point in the sequence. This allows us to avoid
-    // having to use sentinel values.
-    double v;
-    for(uint32_t j = 0; j < dims; j++) {
-        if(!GEOSCoordSeq_getOrdinate_r(this->ctx->ctx, coords, 0, j, &v)) {
             return NULL;
-        }
-
-        ret->set_min(j, v);
-        ret->set_max(j, v);
     }
 
-    // Notice that we skip comparisons on the first
-    // coordinate here.
-    for(uint32_t i = 1; i < ncoords; i++) {
-        for(uint32_t j = 0; j < dims; j++) {
-            if(!GEOSCoordSeq_getOrdinate_r(this->ctx->ctx, coords, i, j, &v)) {
-                return NULL;
-            }
-
-            ret->update_min(j, v);
-            ret->update_max(j, v);
-        }
-    }
-
-    return ret;
 }
 
 
@@ -482,6 +457,125 @@ const GEOSCoordSequence*
 Geom::get_coords()
 {
     return GEOSGeom_getCoordSeq_r(this->ctx->ctx, this->ro_g);
+}
+
+
+Bounds::Ptr
+Geom::get_bounds_simple()
+{
+    const GEOSCoordSequence* seq = this->get_coords();
+    if(!seq) {
+        return NULL;
+    }
+
+    Bounds::Ptr bounds = Bounds::create(this->ctx->dimensions);
+
+    uint32_t len;
+    if(GEOSCoordSeq_getSize_r(this->ctx->ctx, seq, &len) == 0) {
+        throw EastonException("Error getting geometry coordinate sequence.");
+    }
+
+    if(len == 0) {
+        throw EastonException("Invalid empty geometry for get_bounds.");
+    }
+
+    double c;
+    for(uint32_t j = 0; j < this->ctx->dimensions; j++) {
+        if(GEOSCoordSeq_getOrdinate_r(this->ctx->ctx, seq, 0, j, &c) == 0) {
+            throw EastonException("Error getting coordinate.");
+        }
+        bounds->set_min(j, c);
+        bounds->set_max(j, c);
+    }
+
+    for(uint32_t i = 1; i < len; i++) {
+        for(uint32_t j = 0; j < this->ctx->dimensions; j++) {
+            if(GEOSCoordSeq_getOrdinate_r(this->ctx->ctx, seq, i, j, &c) == 0) {
+                throw EastonException("Error getting coordinate.");
+            }
+            bounds->update_min(j, c);
+            bounds->update_max(j, c);
+        }
+    }
+
+    return bounds;
+}
+
+
+Bounds::Ptr
+Geom::get_bounds_polygon()
+{
+    std::vector<Geom::Ptr> rings = this->get_rings();
+    if(rings.size() == 0) {
+        throw EastonException("Invalid rings for polygon bounds.");
+    }
+
+    Bounds::Ptr bounds = rings.at(0)->get_bounds();
+    for(uint32_t i = 1; i < rings.size(); i++) {
+        bounds->expand(rings.at(i)->get_bounds());
+    }
+
+    return bounds;
+}
+
+
+Bounds::Ptr
+Geom::get_bounds_collection()
+{
+    std::vector<Geom::Ptr> geoms = this->get_geoms();
+    if(geoms.size() == 0) {
+        throw EastonException("Invalid geoms for collection bounds.");
+    }
+
+    Bounds::Ptr bounds = geoms.at(0)->get_bounds();
+    for(uint32_t i = 1; i < geoms.size(); i++) {
+        bounds->expand(geoms.at(i)->get_bounds());
+    }
+
+    return bounds;
+}
+
+
+std::vector<Geom::Ptr>
+Geom::get_rings()
+{
+    std::vector<Geom::Ptr> ret;
+    const GEOSGeometry* r;
+
+    int nrings = GEOSGetNumInteriorRings_r(this->ctx->ctx, this->ro_g);
+    if(nrings < 0) {
+        throw EastonException("Invalid polygon geometry.");
+    }
+
+    r = GEOSGetExteriorRing_r(this->ctx->ctx, this->ro_g);
+    ret.push_back(this->ctx->wrap(r));
+
+    for(int i = 0; i < nrings; i++) {
+        r = GEOSGetInteriorRingN_r(this->ctx->ctx, this->ro_g, i);
+        ret.push_back(this->ctx->wrap(r));
+    }
+
+    return ret;
+}
+
+
+std::vector<Geom::Ptr>
+Geom::get_geoms()
+{
+    std::vector<Geom::Ptr> ret;
+    const GEOSGeometry* r;
+
+    int ngeoms = GEOSGetNumGeometries_r(this->ctx->ctx, this->ro_g);
+    if(ngeoms <= 0) {
+        throw EastonException("Invalid polygon geometry.");
+    }
+
+    for(int i = 0; i < ngeoms; i++) {
+        r = GEOSGetGeometryN_r(this->ctx->ctx, this->ro_g, i);
+        ret.push_back(this->ctx->wrap(r));
+    }
+
+    return ret;
 }
 
 

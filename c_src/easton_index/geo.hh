@@ -43,6 +43,8 @@ class Bounds
         static Ptr read(io::Reader::Ptr reader);
         ~Bounds();
 
+        void expand(Ptr other);
+
         void write(io::Writer::Ptr writer);
 
         void set_min(uint32_t dim, double val);
@@ -119,6 +121,13 @@ class Geom
     protected:
         std::shared_ptr<Ctx> ctx;
         const GEOSGeometry* ro_g;
+
+        Bounds::Ptr get_bounds_simple();
+        Bounds::Ptr get_bounds_polygon();
+        Bounds::Ptr get_bounds_collection();
+
+        std::vector<Ptr> get_rings();
+        std::vector<Ptr> get_geoms();
 
         friend class Ctx;
         friend class PrepGeom;
@@ -288,6 +297,7 @@ class Ctx: public std::enable_shared_from_this<Ctx>
         SRID::Ptr srid;
         GEOSCtx ctx;
 
+        friend class Bounds;
         friend class Geom;
         friend class GeomRO;
         friend class GeomRW;
