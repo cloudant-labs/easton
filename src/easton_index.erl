@@ -460,6 +460,8 @@ get_index_srid(Opts) ->
             catch _:_ ->
                 throw({error, {invalid_srid, Val}})
             end;
+        {_, default} ->
+            default;
         {_, Else} ->
             throw({invalid_srid, Else});
         false ->
@@ -569,7 +571,7 @@ get_req_srid(Opts) ->
         {_, Value} ->
             get_index_srid([{srid, Value}]);
         false ->
-            {epsg, 4326}
+            default
     end.
 
 
@@ -578,7 +580,7 @@ get_resp_srid(Opts) ->
         {_, Value} ->
             get_index_srid([{srid, Value}]);
         false ->
-            {epsg, 4326}
+            default
     end.
 
 

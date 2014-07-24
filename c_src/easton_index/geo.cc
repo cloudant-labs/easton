@@ -202,6 +202,13 @@ SRID::LL()
 SRID::Ptr
 SRID::from_reader(io::Reader::Ptr reader)
 {
+    std::string maybe_default;
+    if(reader->read(maybe_default)) {
+        if(maybe_default == "default") {
+            return NULL;
+        }
+    }
+
     if(!reader->read_tuple_n(2)) {
         throw EastonException("Invalid SRID defintion.");
     }
