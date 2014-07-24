@@ -452,13 +452,13 @@ get_index_srid(Opts) ->
             {epsg, N};
         {_, <<"urn:ogc:def:crs:EPSG::", Tail/binary>> = Val} ->
             try
-                SRID = integer_to_list(binary_to_list(Tail)),
+                SRID = list_to_integer(binary_to_list(Tail)),
                 if SRID > 0 -> ok; true ->
                     throw({error, {invalid_epsg, Val}})
                 end,
-                {epsg, 4326}
+                {epsg, SRID}
             catch _:_ ->
-                throw({error, {invalid_srid, Val}})
+                throw({error, {invalid_srid_format, Val}})
             end;
         {_, default} ->
             default;
