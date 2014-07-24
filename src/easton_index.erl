@@ -525,10 +525,10 @@ fmt_update(tprtree, {Props} = GeoJson) ->
     end.
 
 
-fmt_query(rtree, Geom, _Opts) ->
-    fmt_query(Geom);
+fmt_query(rtree, Geom, Opts) ->
+    fmt_query(Geom, Opts);
 fmt_query(tprtree, Geom, Opts) ->
-    Shape = fmt_query(Geom),
+    Shape = fmt_query(Geom, Opts),
 
     StartTime = get_float(t_start, Opts),
     if StartTime /= false -> ok; true ->
@@ -547,6 +547,22 @@ fmt_query(tprtree, Geom, Opts) ->
             {Shape, StartTime, EndTime};
         _ ->
             {Shape, StartTime, EndTime, VBox}
+    end.
+
+
+fmt_query(Geom, Opts) ->
+    case fmt_query(Geom) of
+        {bbox, Coords} when length(Coords) > 4 ->
+            % Relations won't work with bbox
+            % queries in more than two dimensions.
+            case get_filter(Opts) of
+                ?EASTON_FILTER_NONE ->
+                    {bbox, Coords};
+                _Else ->
+                    throw({invalid_query, md_bbox_with_filter})
+            end;
+        Else ->
+            Else
     end.
 
 

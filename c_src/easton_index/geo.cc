@@ -1114,8 +1114,21 @@ Ctx::make_rectangle(double* mins, double* maxs, uint32_t dims, SRID::Ptr srid)
         throw EastonException("Error creating geometry for bbox.");
     }
 
-    // Turn the line into a bbox.
-    Geom::Ptr bbox = ls->get_envelope();
+    // libgeos isn't very good with >2d support so if we have a
+    // bounding box request come in with > 2 dimensions we'll
+    // just leave it as a simple linestring between its two
+    // extremes. The bounding box logic will give us the correct
+    // answer but it can't be used with GeomFilter to get any
+    // sort of meaningful result. Instead we're relying on Erlang
+    // to reject any queries that specify a bounding box and
+    // a filter.
+
+    Geom::Ptr bbox;
+    if(this->dimensions == 2) {
+        bbox = ls->get_envelope();
+    } else {
+        bbox = ls;
+    }
 
     if(!bbox) {
         throw EastonException("Eror creating bbox.");
