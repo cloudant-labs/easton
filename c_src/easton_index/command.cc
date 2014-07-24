@@ -248,7 +248,6 @@ search_entries(easton::Index::Ptr idx, io::Reader::Ptr reader)
     geo::SRID::Ptr ctx_srid = ctx->get_srid();
     geo::SRID::Ptr req_srid = geo::SRID::from_reader(reader);
     geo::SRID::Ptr resp_srid = geo::SRID::from_reader(reader);
-    Entry::Ptr entry = idx->get_reader()->read_query(reader, req_srid);
 
     if(!req_srid) {
         req_srid = ctx_srid;
@@ -258,6 +257,7 @@ search_entries(easton::Index::Ptr idx, io::Reader::Ptr reader)
         resp_srid = ctx_srid;
     }
 
+    Entry::Ptr entry = idx->get_reader()->read_query(reader, req_srid);
     if(!entry) {
         throw EastonException("Invalid query argument for search.");
     }
