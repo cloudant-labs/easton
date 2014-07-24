@@ -117,16 +117,23 @@ is_dir(std::string dname)
 void
 Timer::start()
 {
-    this->clock = std::clock();
+    gettimeofday(&this->tv, NULL);
 }
 
 
 void
 Timer::print(std::string prefix)
 {
-    double diff = (std::clock() - this->clock)
-            / (double) (CLOCKS_PER_SEC / 1000.0);
-    fprintf(stderr, "%s :: %0.3f ms\r\n", prefix.c_str(), diff);
+    uint32_t pid = (uint32_t) getpid();
+    struct timeval tv2;
+    gettimeofday(&tv2, NULL);
+
+    uint64_t t1 = ((uint64_t) this->tv.tv_sec) * 1000000
+            + ((uint64_t) this->tv.tv_usec);
+    uint64_t t2 = ((uint64_t) tv2.tv_sec) * 1000000
+            + ((uint64_t) tv2.tv_usec);
+    double diff = (double) (t2 - t1) / 1000.0;
+    fprintf(stderr, "[%u] %s :: %0.3f ms\r\n", pid, prefix.c_str(), diff);
 }
 
 

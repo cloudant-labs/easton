@@ -2,6 +2,8 @@
 #ifndef EASTON_IO_HH
 #define EASTON_IO_HH
 
+#include <sys/time.h>
+
 #include <ctime>
 #include <string>
 #include <unordered_map>
@@ -34,7 +36,7 @@ class Timer
         void print(std::string prefix);
 
     private:
-        std::clock_t clock;
+        struct timeval tv;
 };
 
 
