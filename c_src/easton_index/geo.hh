@@ -221,6 +221,8 @@ class Ctx: public std::enable_shared_from_this<Ctx>
 
         SRID::Ptr get_srid();
 
+        geo::Bounds::Ptr get_zero_bounds();
+
         GeomFilter make_filter(Geom::Ptr geom, uint64_t filter);
 
         Geom::Ptr geom_from_reader(io::Reader::Ptr reader, SRID::Ptr srid);

@@ -731,6 +731,20 @@ Ctx::get_srid()
 }
 
 
+Bounds::Ptr
+Ctx::get_zero_bounds()
+{
+    geo::Bounds::Ptr ret = geo::Bounds::create(this->dimensions);
+
+    for(uint32_t i = 0; i < this->dimensions; i++) {
+        ret->set_min(i, 0.0);
+        ret->set_max(i, 0.0);
+    }
+
+    return ret;
+}
+
+
 Ctx::~Ctx()
 {
     finishGEOS_r(this->ctx);
