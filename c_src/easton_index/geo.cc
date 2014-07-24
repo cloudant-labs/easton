@@ -1352,8 +1352,8 @@ Ctx::make_ellipse_int(double x, double y, double x_range, double y_range)
     geos::util::GeometricShapeFactory sf(&gf);
 
     sf.setCentre(geos::geom::Coordinate(x, y));
-    sf.setWidth(x_range);
-    sf.setHeight(y_range);
+    sf.setWidth(x_range * 2.0);
+    sf.setHeight(y_range * 2.0);
 
     std::unique_ptr<geos::geom::Polygon> p(sf.createCircle());
     if(!p) {
