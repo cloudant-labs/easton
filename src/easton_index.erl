@@ -527,8 +527,8 @@ fmt_update(tprtree, {Props} = GeoJson) ->
 
 fmt_query(rtree, Geom, Opts) ->
     fmt_query(Geom, Opts);
-fmt_query(tprtree, Geom, Opts) ->
-    Shape = fmt_query(Geom, Opts),
+fmt_query(tprtree, Geom0, Opts) ->
+    Geom = fmt_query(Geom0, Opts),
 
     StartTime = get_float(t_start, Opts),
     if StartTime /= false -> ok; true ->
@@ -544,9 +544,9 @@ fmt_query(tprtree, Geom, Opts) ->
 
     case VBox of
         false ->
-            {Shape, StartTime, EndTime};
+            {Geom, StartTime, EndTime};
         _ ->
-            {Shape, StartTime, EndTime, VBox}
+            {Geom, StartTime, EndTime, VBox}
     end.
 
 

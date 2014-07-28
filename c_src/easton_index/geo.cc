@@ -872,18 +872,18 @@ Geom::Ptr
 Ctx::geom_from_reader(io::Reader::Ptr reader, SRID::Ptr srid)
 {
     if(!reader->read_tuple_n(2)) {
-        throw EastonException("Invalid shape tuple.");
+        throw EastonException("Invalid geometry tuple.");
     }
 
     std::string qtype;
     if(!reader->read(qtype)) {
-        throw EastonException("Error decoding shape type.");
+        throw EastonException("Error decoding geometry type.");
     }
 
     if(qtype == "wkb") {
         io::Bytes::Ptr wkb = reader->read_bytes();
         if(!wkb) {
-            throw EastonException("Invalid shape data for wkb.");
+            throw EastonException("Invalid geometry data for wkb.");
         }
         return this->from_wkb(wkb, srid);
     }
@@ -891,7 +891,7 @@ Ctx::geom_from_reader(io::Reader::Ptr reader, SRID::Ptr srid)
     if(qtype == "wkt") {
         io::Bytes::Ptr wkt = reader->read_bytes();
         if(!wkt) {
-            throw EastonException("Invalid shape data for wkt");
+            throw EastonException("Invalid geometry data for wkt");
         }
         return this->from_wkt(wkt, srid);
     }
@@ -982,7 +982,7 @@ Ctx::geom_from_reader(io::Reader::Ptr reader, SRID::Ptr srid)
         return this->make_ellipse(x, y, x_range, y_range, srid);
     }
 
-    throw EastonException("Unsupported shape definition type.");
+    throw EastonException("Unsupported geometry definition type.");
 }
 
 
@@ -1309,7 +1309,7 @@ Ctx::make_ellipse(double x, double y, double x_range, double y_range,
     // TODO: Ask Norman if we can't just re-implement make_circle
     // by passing radius as both x_range and y_range. It seems like
     // it'd be more accurate in terms of the ellipsoidal calcualtions
-    // but perhaps the shape generation isn't as good here.
+    // but perhaps the geometry generation isn't as good here.
 
     double xyz[3];
 
