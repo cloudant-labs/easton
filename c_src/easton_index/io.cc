@@ -4,6 +4,7 @@
 #include <arpa/inet.h>
 #include <sys/stat.h>
 
+#include <stdexcept>
 #include <string>
 
 #include <leveldb/filter_policy.h>
@@ -244,7 +245,7 @@ Reader::recv()
 
     ret = ::read(EASTON_STREAM_IN, &packet_len, sizeof(uint32_t));
     if(ret == 0) {
-        return NULL;
+        return Reader::Ptr();
     } else if(ret != sizeof(uint32_t)) {
         throw EastonExit(EASTON_ERROR_BAD_READ);
     }
@@ -320,11 +321,13 @@ Reader::read(bool& val)
 bool
 Reader::read(int64_t& val)
 {
+    long long int tmp;
     if(ei_decode_longlong(
-            (char*) this->data->get(), &(this->pos), &val) != 0) {
+            (char*) this->data->get(), &(this->pos), &tmp) != 0) {
         return false;
     }
 
+    val = (int64_t) tmp;
     return true;
 }
 
@@ -332,11 +335,13 @@ Reader::read(int64_t& val)
 bool
 Reader::read(uint64_t& val)
 {
+    long long unsigned int tmp;
     if(ei_decode_ulonglong(
-            (char*) this->data->get(), &(this->pos), &val) != 0) {
+            (char*) this->data->get(), &(this->pos), &tmp) != 0) {
         return false;
     }
 
+    val = (uint64_t) tmp;
     return true;
 }
 
@@ -397,18 +402,18 @@ Reader::read_bytes()
 
     if(ei_get_type(
             (char*) this->data->get(), &(this->pos), &type, &bytes) != 0) {
-        return NULL;
+        return Bytes::Ptr();
     }
 
     if(type != ERL_BINARY_EXT) {
-        return NULL;
+        return Bytes::Ptr();
     }
 
     Bytes::Ptr b = Bytes::create(bytes);
     if(ei_decode_binary(
             (char*) this->data->get(), &(this->pos),
             b->get(), (long*) &bytes) != 0) {
-        return NULL;
+        return Bytes::Ptr();
     }
 
     return b;
@@ -518,7 +523,7 @@ Writer::send()
     }
 
     ret = ::write(EASTON_STREAM_OUT, this->buff->buff, this->buff->index);
-    if(ret != this->buff->index) {
+    if(ret != (uint32_t) this->buff->index) {
         throw EastonExit(EASTON_ERROR_BAD_WRITE);
     }
 }
@@ -728,7 +733,7 @@ Storage::get_kv(Bytes::Ptr key)
     }
 
     if(s.IsNotFound()) {
-        return NULL;
+        return Bytes::Ptr();
     }
 
     return Bytes::copy((uint8_t*) val.data(), val.size());
@@ -877,7 +882,7 @@ Transaction::del_kv(Bytes::Ptr key)
     }
 
     this->batch->Delete(key->slice());
-    this->rbuf[std::string((char*) key->get(), key->size())] = NULL;
+    this->rbuf[std::string((char*) key->get(), key->size())] = Bytes::Ptr();
 }
 
 

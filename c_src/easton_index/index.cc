@@ -23,7 +23,7 @@ sidx_error()
 IndexPropertyH
 sidx_properties(IndexH index)
 {
-    ::Index* idx = static_cast<::Index*>(index);
+    ::Index* idx = (::Index*) index;
     Tools::PropertySet* ps = new Tools::PropertySet;
 
     *ps = idx->GetProperties();
@@ -228,7 +228,7 @@ SpatialEntry::read_query(io::Reader::Ptr reader, geo::Ctx::Ptr ctx,
         throw EastonException("Error reading query geometry.");
     }
 
-    return Entry::Ptr(new SpatialEntry(NULL, geom));
+    return Entry::Ptr(new SpatialEntry(io::Bytes::Ptr(), geom));
 }
 
 
@@ -329,7 +329,7 @@ SpatialEntry::remove(Index* idx, uint64_t docnum, uint64_t dimensions)
 void
 SpatialEntry::search(Index* idx, TopHits& collector, bool nearest)
 {
-    ::Index* index = static_cast<::Index*>(idx->get_index());
+    ::Index* index = (::Index*) idx->get_index();
 
     SpatialIndex::Region r(
             this->bbox->mins(),
@@ -519,7 +519,9 @@ TemporalEntry::read_query(io::Reader::Ptr reader, geo::Ctx::Ptr ctx,
         throw EastonException("Invalid vbox for temporal index update.");
     }
 
-    return Entry::Ptr(new TemporalEntry(NULL, geom, vbox, t_start, t_end));
+    return Entry::Ptr(
+            new TemporalEntry(io::Bytes::Ptr(), geom, vbox, t_start, t_end)
+        );
 }
 
 
@@ -672,7 +674,7 @@ TemporalEntry::remove(Index* idx, uint64_t docnum, uint64_t dimensions)
 void
 TemporalEntry::search(Index* idx, TopHits& collector, bool nearest)
 {
-    ::Index* index = static_cast<::Index*>(idx->get_index());
+    ::Index* index = (::Index*) idx->get_index();
 
     if(!this->bbox) {
         throw EastonException("Invalid temporal entry for removal.");

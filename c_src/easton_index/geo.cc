@@ -1,4 +1,6 @@
 
+#include <stdarg.h>
+
 #include <string>
 #include <sstream>
 
@@ -73,14 +75,14 @@ Bounds::read(io::Reader::Ptr reader)
     Bounds::Ptr ret = Bounds::create(dims);
 
     double v;
-    for(int32_t i = 0; i < dims; i++) {
+    for(uint32_t i = 0; i < dims; i++) {
         if(!reader->read(v)) {
             throw EastonException("Invalid bounds min value.");
         }
         ret->set_min(i, v);
     }
 
-    for(int32_t i = 0; i < dims; i++) {
+    for(uint32_t i = 0; i < dims; i++) {
         if(!reader->read(v)) {
             throw EastonException("Invalid bounds max value.");
         }
@@ -206,7 +208,7 @@ SRID::from_reader(io::Reader::Ptr reader)
     std::string maybe_default;
     if(reader->read(maybe_default)) {
         if(maybe_default == "default") {
-            return NULL;
+            return SRID::Ptr();
         }
     }
 
@@ -408,11 +410,11 @@ Geom::get_envelope()
     Geom::Ptr env = this->ctx->wrap(raw_env);
 
     if(!env) {
-        return NULL;
+        return Geom::Ptr();
     }
 
     if(env->is_empty()) {
-        return NULL;
+        return Geom::Ptr();
     }
 
     switch(env->get_type()) {
@@ -421,7 +423,7 @@ Geom::get_envelope()
         case GEOS_POLYGON:
             return env;
         default:
-            return NULL;
+            return Geom::Ptr();
     }
 }
 
@@ -463,7 +465,7 @@ Geom::get_bounds()
         case GEOS_GEOMETRYCOLLECTION:
             return this->get_bounds_collection();
         default:
-            return NULL;
+            return Bounds::Ptr();
     }
 
 }
@@ -481,7 +483,7 @@ Geom::get_bounds_simple()
 {
     const GEOSCoordSequence* seq = this->get_coords();
     if(!seq) {
-        return NULL;
+        return Bounds::Ptr();
     }
 
     Bounds::Ptr bounds = Bounds::create(this->ctx->dimensions);
@@ -909,13 +911,13 @@ Ctx::geom_from_reader(io::Reader::Ptr reader, SRID::Ptr srid)
         double mins[arity/2];
         double maxs[arity/2];
 
-        for(uint32_t i = 0; i < arity/2; i++) {
+        for(int32_t i = 0; i < arity/2; i++) {
             if(!reader->read(mins[i])) {
                 throw EastonException("Invalid coordinate in bbox.");
             }
         }
 
-        for(uint32_t i = 0; i < arity/2; i++) {
+        for(int32_t i = 0; i < arity/2; i++) {
             if(!reader->read(maxs[i])) {
                 throw EastonException("Invalid coordinate in bounding box.");
             }
@@ -1019,7 +1021,7 @@ Ctx::from_wkb(io::Bytes::Ptr wkb)
 
     reader = GEOSWKBReader_create_r(this->ctx);
     if(reader == NULL) {
-        return NULL;
+        return Geom::Ptr();
     }
 
     Geom::Ptr geom = this->wrap(
@@ -1039,7 +1041,7 @@ Ctx::from_wkt(io::Bytes::Ptr wkt)
 
     reader = GEOSWKTReader_create_r(this->ctx);
     if(reader == NULL) {
-        return NULL;
+        return Geom::Ptr();
     }
 
     Geom::Ptr geom = this->wrap(
@@ -1379,7 +1381,7 @@ Ctx::make_ellipse_int(double x, double y, double x_range, double y_range)
 
     std::unique_ptr<geos::geom::Polygon> p(sf.createCircle());
     if(!p) {
-        return NULL;
+        return Geom::Ptr();
     }
 
     geos::io::WKBWriter writer;
@@ -1398,7 +1400,7 @@ GeomRO::Ptr
 Ctx::wrap(const GEOSGeometry* g)
 {
     if(!g) {
-        return NULL;
+        return GeomRO::Ptr();
     }
 
     return GeomRO::Ptr(new GeomRO(this->shared_from_this(), g));
@@ -1409,7 +1411,7 @@ GeomRW::Ptr
 Ctx::wrap(GEOSGeometry* g)
 {
     if(!g) {
-        return NULL;
+        return GeomRW::Ptr();
     }
 
     return GeomRW::Ptr(new GeomRW(this->shared_from_this(), g));

@@ -108,7 +108,7 @@ maybe_check_epsg_table()
 
         if(strcmp(easton_name, csmap_name) != 0) {
             fprintf(stderr, "INVALID EPSG NAME: %llu %s != %s\r\n",
-                    i, easton_name, csmap_name);
+                   (long long unsigned int) i, easton_name, csmap_name);
             error = true;
         }
     }
