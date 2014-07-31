@@ -3,7 +3,7 @@
 -define(EASTON_STREAM_OUT, 4).
 
 
--define(EASTON_DEFAULT_CS_MAP_DIR, "/usr/local/share/csmap/dict").
+-define(EASTON_DEFAULT_CS_MAP_DIR, "/usr/share/CsMap/dict").
 
 
 -define(EASTON_OK, 0).

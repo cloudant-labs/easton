@@ -43,7 +43,7 @@
 
 
 -include("easton_constants.hrl").
-
+-define(EASTON_LOCAL_CS_MAP_DIR, "/usr/local/share/CsMap/dict").
 
 -record(st, {
     parent,
@@ -480,7 +480,12 @@ get_cs_map_dir(Opts) ->
                     throw({invalid_cs_map_dir, Path0})
             end;
         false ->
-            ?EASTON_DEFAULT_CS_MAP_DIR
+            case filelib:is_dir(?EASTON_DEFAULT_CS_MAP_DIR) of
+                true ->
+                    ?EASTON_DEFAULT_CS_MAP_DIR;
+                false ->
+                    ?EASTON_LOCAL_CS_MAP_DIR
+            end
     end.
 
 

@@ -5,7 +5,7 @@ STREAM_OUT              4
 
 
 # Paths
-DEFAULT_CS_MAP_DIR      "/usr/local/share/csmap/dict"
+DEFAULT_CS_MAP_DIR      "/usr/share/CsMap/dict"
 
 
 # Success Exit
