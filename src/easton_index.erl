@@ -278,7 +278,7 @@ init({Parent, Directory, Cmd, PortOpts}) ->
 
 terminate(_Reason, St) ->
     exit(St#st.killer, kill),
-    catch erlang:close_port(St#st.port),
+    catch erlang:port_close(St#st.port),
     ok.
 
 
