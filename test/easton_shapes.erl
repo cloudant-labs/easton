@@ -9,6 +9,7 @@
 
 -export([
     moving/5,
+    historical/3,
 
     point/0,
     linestring/0,
@@ -29,6 +30,13 @@ moving({ShapeProps}, LowV, HighV, StartTime, EndTime) ->
         {<<"end">>, EndTime}
     ],
     {ShapeProps ++ TemporalProps}.
+
+historical({ShapeProps}, StartTime, EndTime) ->
+    HistoricalProps = [
+        {<<"start">>, StartTime},
+        {<<"end">>, EndTime}
+    ],
+    {ShapeProps ++ HistoricalProps}.
 
 
 point(X, Y) ->
