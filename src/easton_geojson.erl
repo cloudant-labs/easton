@@ -311,7 +311,6 @@ mkbin(Type0, Dims, Count, SubBin) ->
 
 
 type_to_wkb(Type, Dims) ->
-
 	case Dims of
 		2 -> Type;
 		3 -> Type bor ?WKB_Z;
