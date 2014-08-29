@@ -3,6 +3,8 @@
 
 -export([
     point/2,
+    point/3,
+    point/4,
     rectangle/4
 ]).
 
@@ -12,6 +14,8 @@
     historical/3,
 
     point/0,
+    point3d/0,
+    point4d/0,
     linestring/0,
     polygon/0,
     polygon_with_hole/0,
@@ -45,6 +49,17 @@ point(X, Y) ->
         {<<"coordinates">>, [X, Y]}
     ]}.
 
+point(X, Y, Z) ->
+    {[
+        {<<"type">>, <<"Point">>},
+        {<<"coordinates">>, [X, Y, Z]}
+    ]}.
+
+point(X, Y, Z, M) ->
+    {[
+        {<<"type">>, <<"Point">>},
+        {<<"coordinates">>, [X, Y, Z, M]}
+    ]}.
 
 rectangle(X1, Y1, X2, Y2) ->
     {[
@@ -67,6 +82,17 @@ point() ->
         {<<"coordinates">>, [100.0, 0.0]}
     ]}.
 
+point3d() ->
+    {[
+        {<<"type">>, <<"Point">>},
+        {<<"coordinates">>, [100.0, 0.0, 1.0]}
+    ]}.
+
+point4d() ->
+    {[
+        {<<"type">>, <<"Point">>},
+        {<<"coordinates">>, [100.0, 0.0, 1.0, 1.0]}
+    ]}.
 
 linestring() ->
     {[

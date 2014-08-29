@@ -6,6 +6,11 @@
 point_test_() ->
     {"Point", roundtrip(point)}.
 
+point3d_test_() ->
+    {"Point3D", roundtrip(point3d)}.
+
+point4d_test_() ->
+    {"Point4D", roundtrip(point4d)}.
 
 linestring_test_() ->
     {"LineString", roundtrip(linestring)}.
