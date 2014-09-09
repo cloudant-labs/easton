@@ -47,6 +47,7 @@ ERROR_BAD_QUERY         30
 # Index Types
 INDEX_TYPE_RTREE        1
 INDEX_TYPE_TPRTREE      2
+INDEX_TYPE_MVRTREE      3
 
 
 # Commands

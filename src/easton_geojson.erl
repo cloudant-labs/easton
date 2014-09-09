@@ -321,9 +321,9 @@ type_to_wkb(Type, Dims) ->
 
 wkb_to_type(Type) ->
     case Type of
-        _ when (Type band ?WKB_Z) band ?WKB_M == Type ->
+        _ when ((Type band ?WKB_Z) == ?WKB_Z) and ((Type band ?WKB_M) == ?WKB_M) ->
             {4, Type band ?WKB_TYPE_FILTER};
-        _ when (Type band ?WKB_Z) == Type orelse (Type band ?WKB_M) == Type ->
+        _ when (Type band ?WKB_Z) == ?WKB_Z orelse (Type band ?WKB_M) == ?WKB_M ->
             {3, Type band ?WKB_TYPE_FILTER};
         _ ->
             {2, Type}

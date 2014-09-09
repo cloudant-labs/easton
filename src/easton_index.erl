@@ -419,6 +419,8 @@ get_index_type(Opts) ->
         {_, rtree} -> ?EASTON_INDEX_TYPE_RTREE;
         {_, <<"tprtree">>} -> ?EASTON_INDEX_TYPE_TPRTREE;
         {_, tprtree} -> ?EASTON_INDEX_TYPE_TPRTREE;
+        {_, <<"mvrtree">>} -> ?EASTON_INDEX_TYPE_MVRTREE;
+        {_, mvrtree} -> ?EASTON_INDEX_TYPE_MVRTREE;
         {_, Else} -> throw({invalid_index_type, Else});
         false -> ?EASTON_INDEX_TYPE_RTREE
     end.
@@ -430,6 +432,8 @@ get_index_type_name(Opts) ->
         {_, rtree} -> rtree;
         {_, <<"tprtree">>} -> tprtree;
         {_, tprtree} -> tprtree;
+        {_, <<"mvrtree">>} -> mvrtree;
+        {_, mvrtree} -> mvrtree;
         {_, Else} -> throw({invalid_index_type, Else});
         false -> rtree
     end.
@@ -527,8 +531,21 @@ fmt_update(tprtree, {Props} = GeoJson) ->
             {WKB, StartTime, EndTime};
         _ ->
             {WKB, StartTime, EndTime, VBox}
-    end.
+    end;
+fmt_update(mvrtree, {Props} = GeoJson) ->
+    WKB = easton_geojson:to_wkb(GeoJson),
 
+    StartTime = get_float(<<"start">>, Props),
+    if StartTime /= false -> ok; true ->
+        throw({error, invalid_start_time})
+    end,
+
+    EndTime = get_float(<<"end">>, Props),
+    if EndTime /= false -> ok; true ->
+        throw({error, invalid_end_time})
+    end,
+
+    {WKB, StartTime, EndTime}.
 
 fmt_query(rtree, Geom, Opts) ->
     fmt_query(Geom, Opts);
@@ -552,8 +569,21 @@ fmt_query(tprtree, Geom0, Opts) ->
             {Geom, StartTime, EndTime};
         _ ->
             {Geom, StartTime, EndTime, VBox}
-    end.
+    end;
+fmt_query(mvrtree, Geom0, Opts) ->
+    Geom = fmt_query(Geom0, Opts),
 
+    StartTime = get_float(t_start, Opts),
+    if StartTime /= false -> ok; true ->
+        throw({exit, invalid_start_time})
+    end,
+
+    EndTime = get_float(t_end, Opts),
+    if EndTime /= false -> ok; true ->
+        throw({exit, invalid_end_time})
+    end,
+
+    {Geom, StartTime, EndTime}.
 
 fmt_query(Geom, Opts) ->
     case fmt_query(Geom) of
@@ -755,4 +785,3 @@ get_floats(Name, Props) ->
         _ ->
             false
     end.
-

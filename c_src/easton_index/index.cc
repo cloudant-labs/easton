@@ -730,6 +730,300 @@ TemporalEntry::make_filter(geo::Ctx::Ptr ctx, uint64_t filter)
     return ctx->make_filter(this->geom, filter);
 }
 
+Entry::Ptr
+HistoricalEntry::read_id(io::Reader::Ptr reader)
+{
+    if(!reader->read_tuple_n(3)) {
+        throw EastonException("Invalid historical entry id tuple.");
+    }
+
+    geo::Bounds::Ptr bbox = geo::Bounds::read(reader);
+
+    if(!bbox) {
+        throw EastonException("Invalid bbox for historical entry id.");
+    }
+
+    double t_start;
+    double t_end;
+
+    if(!reader->read(t_start)) {
+        throw EastonException("Invalid historical entry id start time.");
+    }
+
+    if(!reader->read(t_end)) {
+        throw EastonException("Invalid historical entry id end time.");
+    }
+
+    return Entry::Ptr(new HistoricalEntry(bbox, t_start, t_end));
+}
+
+
+Entry::Ptr
+HistoricalEntry::read_geo(io::Reader::Ptr reader, geo::Ctx::Ptr ctx,
+    io::Bytes::Ptr& docid)
+{
+    if(!reader->read_tuple_n(2)) {
+        throw EastonException("Error reading historical entry geo tuple.");
+    }
+
+    docid = reader->read_bytes();
+    if(!docid) {
+        throw EastonException("Error reading doc id from geo historical entry.");
+    }
+
+    io::Bytes::Ptr wkb = reader->read_bytes();
+    if(!wkb) {
+        throw EastonException("Error reading wkb from geo historical entry.");
+    }
+
+    geo::Geom::Ptr geom = ctx->from_wkb(wkb);
+    if(!geom) {
+        throw EastonException("Error creating geometry from historical entry.");
+    }
+
+    return Entry::Ptr(new HistoricalEntry(wkb, geom));
+}
+
+
+Entry::Ptr
+HistoricalEntry::read_update(io::Reader::Ptr reader, geo::Ctx::Ptr ctx)
+{
+    int32_t size;
+    if(!reader->read_tuple(size)) {
+        throw EastonException("Invalid historical entry update tuple.");
+    }
+
+    if(size != 3) {
+        throw EastonException("Invalid historical entry update tuple size.");
+    }
+
+    io::Bytes::Ptr wkb = reader->read_bytes();
+    if(!wkb) {
+        throw EastonException("Error reading WKB.");
+    }
+
+    geo::Geom::Ptr geom = ctx->from_wkb(wkb);
+    if(!geom) {
+        throw EastonException("Error getting geometry from WKB.");
+    }
+
+    double t_start;
+    double t_end;
+
+    if(!reader->read(t_start)) {
+        throw EastonException("Error reading historical start time.");
+    }
+
+    if(!reader->read(t_end)) {
+        throw EastonException("Erorr reading historical end time.");
+    }
+
+    return Entry::Ptr(new HistoricalEntry(wkb, geom, t_start, t_end));
+}
+
+
+Entry::Ptr
+HistoricalEntry::read_query(io::Reader::Ptr reader, geo::Ctx::Ptr ctx,
+        geo::SRID::Ptr srid)
+{
+    int32_t size;
+    if(!reader->read_tuple(size)) {
+        throw EastonException("Invalid historical index query tuple.");
+    }
+
+    if(size != 3) {
+        throw EastonException("Invalid historical index tuple size.");
+    }
+
+    geo::Geom::Ptr geom = ctx->geom_from_reader(reader, srid);
+    if(!geom) {
+        throw EastonException("Error reading query geometry.");
+    }
+
+    double t_start;
+    double t_end;
+
+    if(!reader->read(t_start)) {
+        throw EastonException("Invalid historical query start time.");
+    }
+
+    if(!reader->read(t_end)) {
+        throw EastonException("Invalid historical query end time.");
+    }
+
+    return Entry::Ptr(
+            new HistoricalEntry(io::Bytes::Ptr(), geom, t_start, t_end)
+        );
+}
+
+
+HistoricalEntry::HistoricalEntry(io::Bytes::Ptr wkb, geo::Geom::Ptr geom)
+{
+    this->wkb = wkb;
+    this->geom = geom;
+
+    this->bbox = this->geom->get_bounds();
+    if(!this->bbox) {
+        throw EastonException("Error getting bounds from geometry.");
+    }
+}
+
+
+HistoricalEntry::HistoricalEntry(io::Bytes::Ptr wkb, geo::Geom::Ptr geom,
+        double t_start, double t_end)
+{
+    this->wkb = wkb;
+    this->geom = geom;
+    this->bbox = this->geom->get_bounds();
+    this->t_start = t_start;
+    this->t_end = t_end;
+
+    if(!this->bbox) {
+        throw EastonException("Error getting bounds from geometry.");
+    }
+}
+
+
+HistoricalEntry::HistoricalEntry(geo::Bounds::Ptr bbox, double t_start,
+        double t_end)
+{
+    this->bbox = bbox;
+    this->t_start = t_start;
+    this->t_end = t_end;
+}
+
+
+HistoricalEntry::~HistoricalEntry()
+{
+}
+
+
+void
+HistoricalEntry::write_id(io::Writer::Ptr writer)
+{
+    if(!this->bbox) {
+        throw EastonException("Invalid historical entry bbox for id.");
+    }
+
+    writer->start_tuple(3);
+    this->bbox->write(writer);
+    writer->write(this->t_start);
+    writer->write(this->t_end);
+}
+
+
+void
+HistoricalEntry::update(Index* idx, io::Bytes::Ptr docid,
+        uint64_t docnum, uint64_t dimensions)
+{
+    if(!this->wkb) {
+        throw EastonException("Invalid historical entry wkb for index update.");
+    }
+
+    if(!this->bbox) {
+        throw EastonException("Invalid historical entry bbox for index update.");
+    }
+
+    if(dimensions != this->bbox->get_dims()) {
+        throw EastonException("Invalid historical entry bbox dimensions.");
+    }
+
+    // Create the value for the geo entry
+    io::Writer::Ptr writer = io::Writer::create();
+    writer->start_tuple(2);
+    writer->write(docid);
+    writer->write(this->wkb);
+    io::Bytes::Ptr val = writer->serialize();
+
+    if(Index_InsertMVRData(
+                idx->get_index(),
+                docnum,
+                this->bbox->mins(),
+                this->bbox->maxs(),
+                this->t_start,
+                this->t_end,
+                this->bbox->get_dims(),
+                val->get(),
+                val->size()
+            ) != RT_None) {
+        throw EastonException("Error inserting historical entry.");
+    }
+}
+
+
+void
+HistoricalEntry::remove(Index* idx, uint64_t docnum, uint64_t dimensions)
+{
+    if(!this->bbox) {
+        throw EastonException("Invalid historical entry for removal.");
+    }
+
+    if(dimensions != this->bbox->get_dims()) {
+        throw EastonException("Invalid historical entry bbox dimensions.");
+    }
+
+    if(Index_DeleteMVRData(
+                idx->get_index(),
+                docnum,
+                this->bbox->mins(),
+                this->bbox->maxs(),
+                this->t_start,
+                this->t_end,
+                this->bbox->get_dims()
+            ) != RT_None) {
+        throw EastonException("Error removing temporal entry.");
+    }
+}
+
+
+void
+HistoricalEntry::search(Index* idx, TopHits& collector, bool nearest)
+{
+    ::Index* index = (::Index*) idx->get_index();
+
+    if(!this->bbox) {
+        throw EastonException("Invalid historical entry for removal.");
+    }
+
+    SpatialIndex::TimeRegion r(
+            this->bbox->mins(),
+            this->bbox->maxs(),
+            this->t_start,
+            this->t_end,
+            this->bbox->get_dims()
+        );
+
+    EntryVisitor visitor(idx->get_geo_ctx(), idx->get_reader(), collector);
+
+    if(nearest) {
+        NNComparator nnc(idx->get_geo_ctx(), idx->get_reader(), collector);
+        index->index().nearestNeighborQuery(collector.limit, r, visitor, nnc);
+    } else {
+        index->index().intersectsWithQuery(r, visitor);
+    }
+}
+
+
+geo::Geom::Ptr
+HistoricalEntry::get_geometry()
+{
+    if(!this->geom) {
+        throw EastonException("Invalid historical entry has no geometry.");
+    }
+
+    return this->geom;
+}
+
+
+geo::GeomFilter
+HistoricalEntry::make_filter(geo::Ctx::Ptr ctx, uint64_t filter)
+{
+    if(!this->geom) {
+        throw EastonException("Invalid historical entry has no geometry.");
+    }
+
+    return ctx->make_filter(this->geom, filter);
+}
 
 EntryReader::Ptr
 EntryReader::create(geo::Ctx::Ptr ctx, int64_t index_type)
@@ -751,6 +1045,8 @@ EntryReader::read_id(io::Reader::Ptr reader)
     switch(this->index_type) {
         case EASTON_INDEX_TYPE_RTREE:
             return SpatialEntry::read_id(reader);
+        case EASTON_INDEX_TYPE_MVRTREE:
+            return HistoricalEntry::read_id(reader);
         case EASTON_INDEX_TYPE_TPRTREE:
             return TemporalEntry::read_id(reader);
         default:
@@ -765,6 +1061,8 @@ EntryReader::read_geo(io::Reader::Ptr reader, io::Bytes::Ptr& docid)
     switch(this->index_type) {
         case EASTON_INDEX_TYPE_RTREE:
             return SpatialEntry::read_geo(reader, this->ctx, docid);
+        case EASTON_INDEX_TYPE_MVRTREE:
+            return HistoricalEntry::read_geo(reader, this->ctx, docid);
         case EASTON_INDEX_TYPE_TPRTREE:
             return TemporalEntry::read_geo(reader, this->ctx, docid);
         default:
@@ -779,6 +1077,8 @@ EntryReader::read_update(io::Reader::Ptr reader)
     switch(this->index_type) {
         case EASTON_INDEX_TYPE_RTREE:
             return SpatialEntry::read_update(reader, this->ctx);
+        case EASTON_INDEX_TYPE_MVRTREE:
+            return HistoricalEntry::read_update(reader, this->ctx);
         case EASTON_INDEX_TYPE_TPRTREE:
             return TemporalEntry::read_update(reader, this->ctx);
         default:
@@ -793,6 +1093,8 @@ EntryReader::read_query(io::Reader::Ptr reader, geo::SRID::Ptr srid)
     switch(this->index_type) {
         case EASTON_INDEX_TYPE_RTREE:
             return SpatialEntry::read_query(reader, this->ctx, srid);
+        case EASTON_INDEX_TYPE_MVRTREE:
+            return HistoricalEntry::read_query(reader, this->ctx, srid);
         case EASTON_INDEX_TYPE_TPRTREE:
             return TemporalEntry::read_query(reader, this->ctx, srid);
         default:
@@ -1212,6 +1514,8 @@ Index::init_geo_idx(int64_t type, int64_t dims)
         it = RT_RTree;
     } else if(type == EASTON_INDEX_TYPE_TPRTREE) {
         it = RT_TPRTree;
+    } else if(type == EASTON_INDEX_TYPE_MVRTREE) {
+        it = RT_MVRTree;
     } else {
         throw EastonException("Invalid geo index type.");
     }
