@@ -378,7 +378,7 @@ open_index(Cmd, PortOpts0) ->
             end;
         Else ->
             throw(Else)
-    after 1000 ->
+    after 30000 ->
         throw({timeout, open_index})
     end.
 
