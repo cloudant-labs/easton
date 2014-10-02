@@ -90,7 +90,8 @@ main(int argc, const char* argv[])
         } else {
             throw EastonException("Unknown index command: " + cmd);
         }
-
+    } catch(EastonExit& e) {
+        exit(e.code);
     } catch(std::exception& e) {
         fprintf(stderr, "ERROR: %s\r\n", e.what());
         show_stack(255);
