@@ -1270,6 +1270,7 @@ Index::Index(std::string dir, int64_t type, int64_t dims, geo::SRID::Ptr srid)
 
 Index::~Index()
 {
+    io::Transaction::Ptr tx = io::Transaction::autocommit(this->store);
     Index_Destroy(this->geo_idx);
     this->store.reset();
 }
