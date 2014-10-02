@@ -87,7 +87,7 @@ open(Directory, Opts) ->
 
 close({_IndexType, Index}) ->
     Ref = erlang:monitor(process, Index),
-    case gen_server:call(Index, close) of
+    try gen_server:call(Index, close) of
         BinResp when is_binary(BinResp) ->
             case binary_to_term(BinResp) of
                 {ok, true} ->
@@ -104,6 +104,9 @@ close({_IndexType, Index}) ->
         Else ->
             erlang:demonitor(Ref, [flush]),
             throw(Else)
+    catch exit:{noproc, _} ->
+        erlang:demonitor(Ref, [flush]),
+        ok
     end.
 
 
