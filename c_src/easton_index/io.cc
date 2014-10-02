@@ -241,7 +241,8 @@ Reader::Ptr
 Reader::recv()
 {
     uint32_t packet_len;
-    uint32_t ret;
+    uint32_t pos;
+    ssize_t ret;
 
     ret = ::read(EASTON_STREAM_IN, &packet_len, sizeof(uint32_t));
     if(ret == 0) {
@@ -253,10 +254,14 @@ Reader::recv()
     packet_len = ntohl(packet_len);
 
     Bytes::Ptr data = Bytes::create(packet_len);
-    ret = ::read(EASTON_STREAM_IN, data->get(), packet_len);
-    if(ret != packet_len) {
-        throw EastonExit(EASTON_ERROR_BAD_READ);
-    }
+    pos = 0;
+    do {
+        ret = ::read(EASTON_STREAM_IN, data->get() + pos, packet_len - pos);
+        if(ret <= 0) {
+            throw EastonExit(EASTON_ERROR_BAD_READ);
+        }
+        pos += (uint32_t) ret;
+    } while(pos < packet_len);
 
     return Ptr(new Reader(data));
 }
@@ -515,17 +520,26 @@ void
 Writer::send()
 {
     uint32_t packet_len = htonl((uint32_t) this->buff->index);
-    uint32_t ret;
+    uint32_t pos;
+    ssize_t ret;
 
     ret = ::write(EASTON_STREAM_OUT, &packet_len, sizeof(uint32_t));
     if(ret != sizeof(uint32_t)) {
         throw EastonExit(EASTON_ERROR_BAD_WRITE);
     }
 
-    ret = ::write(EASTON_STREAM_OUT, this->buff->buff, this->buff->index);
-    if(ret != (uint32_t) this->buff->index) {
-        throw EastonExit(EASTON_ERROR_BAD_WRITE);
-    }
+    pos = 0;
+    do {
+        ret = ::write(
+                    EASTON_STREAM_OUT,
+                    this->buff->buff + pos,
+                    this->buff->index - pos
+                );
+        if(ret <= 0) {
+            throw EastonExit(EASTON_ERROR_BAD_READ);
+        }
+        pos += (uint32_t) ret;
+    } while(pos < this->buff->index);
 }
 
 
