@@ -4,6 +4,7 @@
 
 
 #include <string>
+#include <sstream>
 
 #include "easton.hh"
 
@@ -37,15 +38,19 @@ class EastonExit: public std::exception
 {
     public:
         EastonExit(int code) {
+            std::stringstream ss;
+            ss << "EastonExit: " << this->code;
+            this->reason = ss.str();
             this->code = code;
         }
 
         virtual ~EastonExit() throw() {}
 
         virtual const char* what() const throw() {
-            return "EastonExit";
+            return this->reason.c_str();
         }
 
+        std::string reason;
         int code;
 };
 
