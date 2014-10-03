@@ -539,7 +539,7 @@ Writer::send()
             throw EastonExit(EASTON_ERROR_BAD_READ);
         }
         pos += (uint32_t) ret;
-    } while(pos < this->buff->index);
+    } while(pos < (uint32_t) this->buff->index);
 }
 
 
