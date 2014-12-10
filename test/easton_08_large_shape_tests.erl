@@ -22,13 +22,22 @@ close_idx(Idx) ->
     easton_index:close(Idx).
 
 
-large_shape_test() ->
-    Idx = open_idx(),
-    try
-        run(Idx)
-    after
-        close_idx(Idx)
-    end.
+large_shape_test_() ->
+    % This test can sometimes just exceed the default eunit
+    % test timeout of 5 seconds, so force a higher timeout
+    {timeout,
+        10,
+        [
+            fun() ->
+                Idx = open_idx(),
+                try
+                    run(Idx)
+                after
+                    close_idx(Idx)
+                end
+            end
+        ]
+    }.
 
 run(Idx) ->
     Shape = circle(),
