@@ -14,7 +14,14 @@ std::string
 sidx_error()
 {
     char* err = Error_GetLastErrorMsg();
-    std::string m(err);
+    std::string m;
+
+    if(err != NULL) {
+        m = std::string(err);
+    } else {
+        m = std::string("");
+    }
+
     free(err);
     return m;
 }
