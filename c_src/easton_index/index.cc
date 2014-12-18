@@ -1286,6 +1286,7 @@ Index::~Index()
 void
 Index::sync()
 {
+    io::Transaction::Ptr tx = io::Transaction::autocommit(this->store);
     Index_Flush(this->geo_idx);
 }
 
