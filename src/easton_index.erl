@@ -57,6 +57,7 @@
 
 -define(EXE_NAME, "easton_index").
 -define(PORT_OPTS, [{packet, 4}, binary, exit_status, nouse_stdio, hide]).
+-define(TIMEOUT, 300000).
 
 
 open(Directory) ->
@@ -94,7 +95,7 @@ close({_IndexType, Index}) ->
                     receive
                         {'DOWN', Ref, process, Index, _} ->
                             ok
-                    after 5000 ->
+                    after ?TIMEOUT ->
                         erlang:demonitor(Ref, [flush]),
                         throw({timeout, close})
                     end;
@@ -142,7 +143,7 @@ destroy(Directory, Opts) ->
             ok;
         {Port, Else} ->
             throw(Else)
-        after 5000 ->
+        after ?TIMEOUT ->
             throw(timeout)
     end.
 
@@ -306,7 +307,7 @@ handle_call({cmd, C}, _From, #st{port = Port} = St) ->
             {reply, Resp, St};
         Else ->
             throw({error, Else})
-    after 5000 ->
+    after ?TIMEOUT ->
             exit({timeout, C})
     end;
 
@@ -353,7 +354,7 @@ kill_monitor(OsPid) ->
     receive
         {'DOWN', _Ref, process, _Pid, _Reason} ->
             os:cmd(kill_cmd(OsPid))
-    after 300000 ->
+    after ?TIMEOUT ->
         kill_monitor(OsPid)
     end.
 
@@ -381,7 +382,7 @@ open_index(Cmd, PortOpts0) ->
             end;
         Else ->
             throw(Else)
-    after 30000 ->
+    after ?TIMEOUT ->
         throw({timeout, open_index})
     end.
 
@@ -399,7 +400,7 @@ init_index(Cmd, Port, OsPid) ->
             end;
         Else ->
             throw({error, Else})
-    after 5000 ->
+    after ?TIMEOUT ->
             exit({timeout, Cmd})
     end.
 

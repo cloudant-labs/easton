@@ -1286,6 +1286,7 @@ Index::~Index()
 void
 Index::sync()
 {
+    io::Transaction::Ptr tx = io::Transaction::autocommit(this->store);
     Index_Flush(this->geo_idx);
 }
 
@@ -1401,6 +1402,8 @@ Index::update(io::Bytes::Ptr docid, Entry::Vector entries)
 
     this->store_counts();
 
+    Index_Flush(this->geo_idx);
+
     tx->commit();
 }
 
@@ -1411,6 +1414,7 @@ Index::remove(io::Bytes::Ptr docid)
     io::Transaction::Ptr tx = io::Transaction::open(this->store);
     this->remove_int(docid);
     this->store_counts();
+    Index_Flush(this->geo_idx);
     tx->commit();
 }
 
