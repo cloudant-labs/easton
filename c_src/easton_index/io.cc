@@ -793,7 +793,7 @@ Storage::new_geoid()
     int64_t ret = this->geoid_num++;
 
     io::Writer::Ptr writer = io::Writer::create();
-    writer->write(ret);
+    writer->write(this->geoid_num);
     this->put_kv(this->geoid_num_key, writer->serialize());
 
     return ret;
