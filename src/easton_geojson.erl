@@ -20,8 +20,8 @@
 
 
 to_wkb({Geom}) ->
-    {_Dims, _Count, Bin} = convert({Geom}),
-    Bin.
+    {_Dims, _Count, Data} = convert({Geom}),
+    iolist_to_binary(Data).
 
 
 from_wkb(Bin) when is_binary(Bin) ->
@@ -42,51 +42,57 @@ convert({Props}) ->
 
 convert(?JSON_POINT, Props) ->
     Coord = get_coords(Props),
-    {Dims, 1, Bin} = coord_to_wkb(Coord),
-    {Dims, 1, mkbin(?WKB_POINT, Dims, 0, Bin)};
+    {Dims, 1, IoList} = coord_to_wkb(Coord),
+    {Dims, 1, mkiolist(?WKB_POINT, Dims, 0, IoList)};
 
 convert(?JSON_LINESTRING, Props) ->
     Coords = get_coords(Props),
-    {Dims, Count, Bin} = coords_to_wkb(Coords),
-    {Dims, 1, mkbin(?WKB_LINESTRING, Dims, Count, Bin)};
+    {Dims, Count, IoList} = coords_to_wkb(Coords),
+    {Dims, 1, mkiolist(?WKB_LINESTRING, Dims, Count, IoList)};
 
 convert(?JSON_POLYGON, Props) ->
     Coords = get_coords(Props),
-    {Dims, Count, Bin} = rings_to_wkb(Coords),
-    {Dims, 1, mkbin(?WKB_POLYGON, Dims, Count, Bin)};
+    {Dims, Count, IoList} = rings_to_wkb(Coords),
+    {Dims, 1, mkiolist(?WKB_POLYGON, Dims, Count, IoList)};
 
 convert(?JSON_MULTIPOINT, Props) ->
     Coords = get_coords(Props),
     ToWKB = fun coord_to_wkb/1,
-    {Dims, Count, Bin} = json_multi(?WKB_POINT, ToWKB, Coords),
-    {Dims, 1, mkbin(?WKB_MULTIPOINT, Dims, Count, Bin)};
+    {Dims, Count, IoList} = json_multi(?WKB_POINT, ToWKB, Coords),
+    {Dims, 1, mkiolist(?WKB_MULTIPOINT, Dims, Count, IoList)};
 
 convert(?JSON_MULTILINESTRING, Props) ->
     Coords = get_coords(Props),
     ToWKB = fun coords_to_wkb/1,
-    {Dims, Count, Bin} = json_multi(?WKB_LINESTRING, ToWKB, Coords),
-    {Dims, 1, mkbin(?WKB_MULTILINESTRING, Dims, Count, Bin)};
+    {Dims, Count, IoList} = json_multi(?WKB_LINESTRING, ToWKB, Coords),
+    {Dims, 1, mkiolist(?WKB_MULTILINESTRING, Dims, Count, IoList)};
 
 convert(?JSON_MULTIPOLYGON, Props) ->
     Coords = get_coords(Props),
     ToWKB = fun rings_to_wkb/1,
-    {Dims, Count, Bin} = json_multi(?WKB_POLYGON, ToWKB, Coords),
-    {Dims, 1, mkbin(?WKB_MULTIPOLYGON, Dims, Count, Bin)};
+    {Dims, Count, IoList} = json_multi(?WKB_POLYGON, ToWKB, Coords),
+    {Dims, 1, mkiolist(?WKB_MULTIPOLYGON, Dims, Count, IoList)};
 
 convert(?JSON_GEOMETRYCOLLECTION, Props) ->
     Geoms = get_geoms(Props),
-    {Dims, Count, AccBins} = lists:foldl(fun(G, {Dims, Count, Bins}) ->
+    {Dims, Count, AccIoLists} = lists:foldl(fun(G, {Dims, Count, IoLists}) ->
+        % This case pattern match is a bit subtle. The logic
+        % is that we want to assert that all returned values for
+        % Dims are identical but we don't want to assert what it
+        % is before hand. Thus when we don't match Dims we assert
+        % that its because this is the first seen value by checking
+        % that Dims is undefined.
         case convert(G) of
-            {NewDims, 1, NewBin} when Dims == undefined, Bins == [] ->
-                {NewDims, 1, [NewBin]};
-            {Dims, 1, NewBin} ->
-                {Dims, Count + 1, [NewBin | Bins]};
+            {Dims, 1, NewIoList} ->
+                {Dims, Count + 1, [[NewIoList] | IoLists]};
+            {NewDims, 1, NewIoList} when Dims == undefined, IoLists == [] ->
+                {NewDims, 1, [NewIoList]};
             {_, _, _} ->
                 throw({invalid_geojson, mismatched_dimensions})
         end
     end, {undefined, 0, []}, Geoms),
-    FinalBin = iolist_to_binary(lists:reverse(AccBins)),
-    {Dims, 1, mkbin(?WKB_GEOMETRYCOLLECTION, Dims, Count, FinalBin)};
+    FinalIoList = lists:reverse(AccIoLists),
+    {Dims, 1, mkiolist(?WKB_GEOMETRYCOLLECTION, Dims, Count, FinalIoList)};
 
 convert(_, Props) ->
     throw({invalid_geojson, {bad_type, {Props}}}).
@@ -194,13 +200,13 @@ get_geoms(Props) ->
 json_multi(_Type, _ToWKB, []) ->
     throw({invalid_geojson, empty_multi_geometry});
 json_multi(Type, ToWKB, [Coords]) ->
-    {Dims, Count, AccBin} = ToWKB(Coords),
-    {Dims, 1, mkbin(Type, Dims, Count, AccBin)};
+    {Dims, Count, AccIoList} = ToWKB(Coords),
+    {Dims, 1, mkiolist(Type, Dims, Count, AccIoList)};
 json_multi(Type, ToWKB, [Coords | Rest]) ->
-    {Dims, Count, AccBin} = json_multi(Type, ToWKB, Rest),
+    {Dims, Count, AccIoList} = json_multi(Type, ToWKB, Rest),
     case json_multi(Type, ToWKB, [Coords]) of
-        {Dims, 1, NewBin} ->
-            {Dims, Count + 1, <<NewBin/binary, AccBin/binary>>};
+        {Dims, 1, NewIoList} ->
+            {Dims, Count + 1, [NewIoList | AccIoList]};
         {_BadDims, _, _} ->
             throw({invalid_geojson, mismatched_dimensions})
     end.
@@ -221,18 +227,18 @@ rings_to_wkb([]) ->
 rings_to_wkb([Ring]) ->
     ring_to_wkb(Ring);
 rings_to_wkb([Ring | Rest]) ->
-    {Dims, Count, AccBin} = rings_to_wkb(Rest),
+    {Dims, Count, AccIoList} = rings_to_wkb(Rest),
     case ring_to_wkb(Ring) of
-        {Dims, 1, NewBin} ->
-            {Dims, Count + 1, <<NewBin/binary, AccBin/binary>>};
+        {Dims, 1, NewIoList} ->
+            {Dims, Count + 1, [NewIoList | AccIoList]};
         {_BadDims, _, _} ->
             throw({invalid_geojson, mismatched_dimensions})
     end.
 
 
 ring_to_wkb(Coords) ->
-    {Dims, Count, Bin} = coords_to_wkb(Coords),
-    {Dims, 1, <<Count:32/big-unsigned-integer, Bin/binary>>}.
+    {Dims, Count, IoList} = coords_to_wkb(Coords),
+    {Dims, 1, [<<Count:32/big-unsigned-integer>> | IoList]}.
 
 
 wkb_to_rings(Endian, Dims, WKB) ->
@@ -249,10 +255,10 @@ coords_to_wkb([]) ->
 coords_to_wkb([Coord]) ->
     coord_to_wkb(Coord);
 coords_to_wkb([Coord | Rest]) ->
-    {Dims, Count, AccBin} = coords_to_wkb(Rest),
+    {Dims, Count, AccIoList} = coords_to_wkb(Rest),
     case coord_to_wkb(Coord) of
-        {Dims, 1, NewBin} ->
-            {Dims, Count + 1, <<NewBin/binary, AccBin/binary>>};
+        {Dims, 1, NewIoList} ->
+            {Dims, Count + 1, [NewIoList | AccIoList]};
         {_BadDims, _, _} ->
             throw({invalid_geojson, mismatched_dimensions})
     end.
@@ -269,13 +275,13 @@ wkb_to_coords(Endian, Dims, WKB) ->
 
 coord_to_wkb([X, Y])
         when is_number(X), is_number(Y) ->
-    {2, 1, <<X:64/float, Y:64/float>>};
+    {2, 1, [<<X:64/float, Y:64/float>>]};
 coord_to_wkb([X, Y, Z])
         when is_number(X), is_number(Y), is_number(Z) ->
-    {3, 1, <<X:64/float, Y:64/float, Z:64/float>>};
+    {3, 1, [<<X:64/float, Y:64/float, Z:64/float>>]};
 coord_to_wkb([X, Y, Z, M])
         when is_number(X), is_number(Y), is_number(Z), is_number(M) ->
-    {4, 1, <<X:64/float, Y:64/float, Z:64/float, M:64/float>>};
+    {4, 1, [<<X:64/float, Y:64/float, Z:64/float, M:64/float>>]};
 coord_to_wkb(BadCoord) ->
     throw({invalid_geojson, {bad_coord, BadCoord}}).
 
@@ -300,14 +306,14 @@ wkb_to_coord(_Endian, _Dims, WKB) ->
     throw({invalid_wkb, {bad_coord, WKB}}).
 
 
-mkbin(?WKB_POINT = Type0, Dims, _Count, SubBin) ->
+mkiolist(?WKB_POINT = Type0, Dims, _Count, IoList) ->
     Type = type_to_wkb(Type0, Dims),
-    <<0:8/integer, Type:32/big-unsigned-integer, SubBin/binary>>;
+    [<<0:8/integer, Type:32/big-unsigned-integer>> | IoList];
 
-mkbin(Type0, Dims, Count, SubBin) ->
+mkiolist(Type0, Dims, Count, IoList) ->
     Type = type_to_wkb(Type0, Dims),
-    <<0:8/integer, Type:32/big-unsigned-integer,
-        Count:32/big-unsigned-integer, SubBin/binary>>.
+    [<<0:8/integer, Type:32/big-unsigned-integer,
+        Count:32/big-unsigned-integer>> | IoList].
 
 
 type_to_wkb(Type, Dims) ->
