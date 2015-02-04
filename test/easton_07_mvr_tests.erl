@@ -24,13 +24,15 @@ close_idx(Idx) ->
 
 basic_test_() ->
     {"Basic MVR Tests",
-        {setup,
-            fun open_idx/0,
-            fun close_idx/1,
-            fun(Idx) -> {with, Idx, [
-                fun historical_shape_test/1
-            ]} end
-        }
+        {timeout, 10, [
+            {setup,
+                fun open_idx/0,
+                fun close_idx/1,
+                fun(Idx) -> {with, Idx, [
+                    fun historical_shape_test/1
+                ]} end
+            }
+        ]}
     }.
 
 

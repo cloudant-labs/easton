@@ -17,25 +17,27 @@ num_points() ->
 
 search_test_() ->
     {"Search Tests",
-        {setup,
-            fun open_idx/0,
-            fun close_idx/1,
-            fun(Idx) -> {with, Idx, [
-                fun get_all_test/1,
-                fun get_limit_test/1,
-                fun get_nearest_test/1,
-                fun get_bookmark_test/1,
-                fun get_nearest_bookmark_test/1,
-                fun get_wkt_test/1,
-                fun get_bbox_test/1,
-                fun get_bbox_coord_test/1,
-                fun get_circle_test/1,
-                fun get_ellipse_test/1,
-                fun get_empty_shapes_test/1,
-                fun get_empty_wkt_test/1,
-                fun get_with_req_srid_test/1
-            ]} end
-        }
+        {timeout, 10, [
+            {setup,
+                fun open_idx/0,
+                fun close_idx/1,
+                fun(Idx) -> {with, Idx, [
+                    fun get_all_test/1,
+                    fun get_limit_test/1,
+                    fun get_nearest_test/1,
+                    fun get_bookmark_test/1,
+                    fun get_nearest_bookmark_test/1,
+                    fun get_wkt_test/1,
+                    fun get_bbox_test/1,
+                    fun get_bbox_coord_test/1,
+                    fun get_circle_test/1,
+                    fun get_ellipse_test/1,
+                    fun get_empty_shapes_test/1,
+                    fun get_empty_wkt_test/1,
+                    fun get_with_req_srid_test/1
+                ]} end
+            }
+        ]}
     }.
 
 
