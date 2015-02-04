@@ -1265,8 +1265,11 @@ Index::Index(std::string dir, int64_t type, int64_t dims, geo::SRID::Ptr srid)
         throw EastonException("Index directory does not exist.");
     }
 
+    this->idx_type = type;
+    this->idx_dims = dims;
+
     this->init_storage();
-    this->init_geo_idx(type, dims);
+    this->init_geo_idx();
     this->init_srid(srid);
     this->init_counts();
 
@@ -1295,6 +1298,18 @@ IndexH
 Index::get_index()
 {
     return this->geo_idx;
+}
+
+
+void
+Index::reset_index()
+{
+    io::Transaction::Ptr tx = io::Transaction::open(this->store);
+    Index_Destroy(this->geo_idx);
+    tx->commit();
+    tx.reset();
+
+    this->init_geo_idx();
 }
 
 
@@ -1486,7 +1501,7 @@ Index::init_storage()
 
 
 void
-Index::init_geo_idx(int64_t type, int64_t dims)
+Index::init_geo_idx()
 {
     this->geo_idx = NULL;
 
@@ -1495,7 +1510,7 @@ Index::init_geo_idx(int64_t type, int64_t dims)
 
     RTIndexType it;
 
-    this->dimensions = dims;
+    this->dimensions = this->idx_dims;
 
     this->load_index_id();
     if(this->index_id != SpatialIndex::StorageManager::NewPage) {
@@ -1522,11 +1537,11 @@ Index::init_geo_idx(int64_t type, int64_t dims)
         throw EastonException("Error setting write through.");
     }
 
-    if(type == EASTON_INDEX_TYPE_RTREE) {
+    if(this->idx_type == EASTON_INDEX_TYPE_RTREE) {
         it = RT_RTree;
-    } else if(type == EASTON_INDEX_TYPE_TPRTREE) {
+    } else if(this->idx_type == EASTON_INDEX_TYPE_TPRTREE) {
         it = RT_TPRTree;
-    } else if(type == EASTON_INDEX_TYPE_MVRTREE) {
+    } else if(this->idx_type == EASTON_INDEX_TYPE_MVRTREE) {
         it = RT_MVRTree;
     } else {
         throw EastonException("Invalid geo index type.");
@@ -1536,7 +1551,7 @@ Index::init_geo_idx(int64_t type, int64_t dims)
         throw EastonException("Error setting geo index type.");
     }
 
-    if(IndexProperty_SetDimension(props, (uint32_t) dims) != RT_None) {
+    if(IndexProperty_SetDimension(props, (uint32_t)this->idx_dims) != RT_None) {
         throw EastonException("Error setting geo index dimensions.");
     }
 
@@ -1566,7 +1581,7 @@ Index::init_geo_idx(int64_t type, int64_t dims)
 
     props = sidx_properties(this->geo_idx);
 
-    if(IndexProperty_GetDimension(props) != this->dimensions) {
+    if(IndexProperty_GetDimension(props) != this->idx_dims) {
         throw EastonException("Dimension mismatch with existing geo index.");
     }
 
