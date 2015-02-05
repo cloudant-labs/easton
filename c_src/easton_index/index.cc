@@ -1302,14 +1302,14 @@ Index::get_index()
 
 
 void
-Index::reset_index()
+Index::reset_index(bool validate)
 {
     io::Transaction::Ptr tx = io::Transaction::open(this->store);
     Index_Destroy(this->geo_idx);
     tx->commit();
     tx.reset();
 
-    this->init_geo_idx();
+    this->init_geo_idx(validate);
 }
 
 
@@ -1501,7 +1501,7 @@ Index::init_storage()
 
 
 void
-Index::init_geo_idx()
+Index::init_geo_idx(bool validate)
 {
     this->geo_idx = NULL;
 
@@ -1570,7 +1570,7 @@ Index::init_geo_idx()
         throw IndexException("Geo Index Error: " + sidx_error());
     }
 
-    if(!Index_IsValid(this->geo_idx)) {
+    if(validate && !Index_IsValid(this->geo_idx)) {
         throw IndexException("Invalid Geo Index: " + sidx_error());
     }
 

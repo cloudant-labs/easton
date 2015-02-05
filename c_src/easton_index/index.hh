@@ -267,7 +267,7 @@ class Index
         void sync();
 
         IndexH get_index();
-        void reset_index();
+        void reset_index(bool validate = true);
     
         geo::Ctx::Ptr get_geo_ctx();
         EntryReader::Ptr get_reader();
@@ -293,7 +293,7 @@ class Index
         void remove_int(io::Bytes::Ptr docid);
 
         void init_storage();
-        void init_geo_idx();
+        void init_geo_idx(bool validate = true);
         void init_srid(geo::SRID::Ptr srid);
         void init_counts();
         void load_index_id();

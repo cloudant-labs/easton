@@ -355,7 +355,7 @@ handle(easton::Index::Ptr idx, io::Reader::Ptr reader)
         throw EastonException("Invalid command op.");
     }
 
-    idx->reset_index();
+    idx->reset_index(false);
 
     switch(op) {
         case EASTON_COMMAND_CLOSE:
