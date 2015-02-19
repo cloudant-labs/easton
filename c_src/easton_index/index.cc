@@ -1555,6 +1555,12 @@ Index::init_geo_idx(bool validate)
         throw EastonException("Error setting geo index type.");
     }
 
+    if(it == RT_RTree) {
+        if(IndexProperty_SetIndexVariant(props, RT_Star) != RT_None) {
+            throw EastonException("Error setting geo index variant");
+        }
+    }
+
     if(IndexProperty_SetDimension(props, (uint32_t)this->idx_dims) != RT_None) {
         throw EastonException("Error setting geo index dimensions.");
     }

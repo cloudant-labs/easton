@@ -25,10 +25,15 @@ show_stack(int sig)
 {
     void* frames[64];
     size_t size;
+    const int8_t* dbg_info = (int8_t*) getenv("EASTON_DEBUG_INFO");
+
+    if(dbg_info != NULL) {
+        fprintf(stderr, "Error: Signal %d\n", sig);
+    } else {
+        fprintf(stderr, "Error: Signal %d :: %s\n", sig, dbg_info);
+    }
 
     size = backtrace(frames, 64);
-
-    fprintf(stderr, "Error: Signal %d:\n", sig);
     backtrace_symbols_fd(frames, size, STDERR_FILENO);
 
     if(sig == 0) {

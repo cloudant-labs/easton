@@ -68,7 +68,10 @@ open(Directory, Opts) ->
     ensure_idx_dir(Directory),
 
     CsMapDir = get_cs_map_dir(Opts),
-    Env = {env, [{"EASTON_CS_MAP_DIR", CsMapDir}]},
+    Env = {env, [
+        {"EASTON_CS_MAP_DIR", CsMapDir},
+        {"EASTON_DEBUG_INFO", Directory}
+    ]},
 
     Cmd = {run, [
         {index_directory, iolist_to_binary(Directory)},
