@@ -1135,6 +1135,8 @@ NNComparator::getMinimumDistance(const SpatialIndex::IShape& query,
 
     d.getData(size, &data);
 
+    std::unique_ptr<uint8_t[]> _auto_release(data);
+
     io::Bytes::Ptr buf = io::Bytes::proxy(data, size);
     io::Reader::Ptr reader = io::Reader::create(buf);
     io::Bytes::Ptr docid;
@@ -1171,6 +1173,8 @@ EntryVisitor::visitData(const SpatialIndex::IData& d)
     uint32_t size;
 
     d.getData(size, &data);
+
+    std::unique_ptr<uint8_t[]> _auto_release(data);
 
     io::Bytes::Ptr buf = io::Bytes::proxy(data, size);
     io::Reader::Ptr reader = io::Reader::create(buf);
