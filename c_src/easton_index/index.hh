@@ -52,11 +52,19 @@ class TopHits
         void push(io::Bytes::Ptr docid, geo::Geom::Ptr geom);
         Hit pop();
 
+        void visit_node();
+        void visit_data();
+
         std::priority_queue<Hit, std::vector<Hit>, HitCmp> hits;
         HitCmp cmp;
         Hit bookmark;
         geo::GeomFilter filt;
         uint32_t limit;
+
+        uint64_t nodes_visited;
+        uint64_t leaves_visited;
+        uint64_t leaves_filtered;
+        uint64_t leaves_dropped;
 };
 
 

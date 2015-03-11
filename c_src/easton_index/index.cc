@@ -92,6 +92,11 @@ TopHits::TopHits(Hit bookmark, geo::GeomFilter filt, uint32_t limit)
     this->bookmark = bookmark;
     this->filt = filt;
     this->limit = limit;
+
+    this->nodes_visited = 0;
+    this->leaves_visited = 0;
+    this->leaves_filtered = 0;
+    this->leaves_dropped = 0;
 }
 
 
@@ -143,6 +148,7 @@ TopHits::push(io::Bytes::Ptr docid, geo::Geom::Ptr geom)
     double dist = this->distance(docid, geom);
 
     if(dist == DBL_MAX) {
+        this->leaves_filtered += 1;
         return;
     }
 
@@ -150,11 +156,11 @@ TopHits::push(io::Bytes::Ptr docid, geo::Geom::Ptr geom)
 
     if(this->hits.size() < limit) {
         this->hits.push(hit);
+    } else if(this->cmp(hit, this->hits.top())) {
+        this->hits.pop();
+        this->hits.push(hit);
     } else {
-        if(this->cmp(hit, this->hits.top())) {
-            this->hits.pop();
-            this->hits.push(hit);
-        }
+        this->leaves_dropped += 1;
     }
 }
 
@@ -165,6 +171,20 @@ TopHits::pop()
     Hit ret = hits.top();
     hits.pop();
     return ret;
+}
+
+
+void
+TopHits::visit_node()
+{
+    this->nodes_visited += 1;
+}
+
+
+void
+TopHits::visit_data()
+{
+    this->leaves_visited += 1;
 }
 
 
@@ -1163,6 +1183,7 @@ EntryVisitor::~EntryVisitor()
 void
 EntryVisitor::visitNode(const SpatialIndex::INode& in)
 {
+    this->hits.visit_node();
 }
 
 
@@ -1171,6 +1192,8 @@ EntryVisitor::visitData(const SpatialIndex::IData& d)
 {
     uint8_t* data;
     uint32_t size;
+
+    this->hits.visit_data();
 
     d.getData(size, &data);
 
