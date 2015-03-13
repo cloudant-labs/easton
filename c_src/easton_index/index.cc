@@ -10,6 +10,27 @@
 NS_EASTON_BEGIN
 
 
+typedef std::shared_ptr<sidx::IShape> SidxShapePtr;
+
+
+SidxShapePtr
+sidx_get_shape(const sidx::IEntry* entry)
+{
+    sidx::IShape* s;
+    entry->getShape(&s);
+    return SidxShapePtr(s);
+}
+
+
+SidxShapePtr
+sidx_get_child_shape(const sidx::INode* node, uint32_t child)
+{
+    sidx::IShape* s;
+    node->getChildShape(child, &s);
+    return SidxShapePtr(s);
+}
+
+
 std::string
 sidx_error()
 {
@@ -370,7 +391,8 @@ SpatialEntry::search(Index* idx, TopHits& collector, bool nearest)
         NNComparator nnc(idx->get_geo_ctx(), idx->get_reader(), collector);
         index->index().nearestNeighborQuery(collector.limit, r, visitor, nnc);
     } else {
-        index->index().intersectsWithQuery(r, visitor);
+        RTreePager pager(&visitor, &r);
+        index->index().queryStrategy(pager);
     }
 }
 
@@ -1212,6 +1234,145 @@ EntryVisitor::visitData(const SpatialIndex::IData& d)
 void
 EntryVisitor::visitData(std::vector<const SpatialIndex::IData*>& v)
 {
+}
+
+
+RTreePager::RTreePager(EntryVisitor* visitor, sidx::IShape* query)
+{
+    this->visitor = visitor;
+    this->query = query;
+
+    geo::Geom::Ptr g = this->visitor->hits.filt.geom();
+    geo::Bounds::Ptr b = g->get_centroid()->get_bounds();
+
+    this->query_center = new SpatialIndex::Point(b->mins(), b->get_dims());
+}
+
+
+RTreePager::~RTreePager()
+{
+    delete this->query_center;
+}
+
+
+void
+RTreePager::getNextEntry(const SpatialIndex::IEntry& entry,
+        int64_t& next_id, bool& hasNext)
+{
+    const sidx::INode* node = dynamic_cast<const sidx::INode*>(&entry);
+    SidxShapePtr mbr = sidx_get_shape(&entry);
+
+    if(!this->query->intersectsShape(*(mbr.get()))) {
+        goto done;
+    }
+
+    // The magic dust in our new tree traversal is this test
+    // that can determine whether we need to inspect a given
+    // node based on the minimum distance between the center
+    // of the query and the MBR of the node. If that minimum
+    // distance is larger than the last entry on the current
+    // page we know that we don't have to bother even looking
+    // at the node.
+    //
+    // The astute reader will realize that we're filtering
+    // both before and after we add the node id to the stack.
+    // This is because the data for our current page changes
+    // inbetween so we need to check both times. The reason
+    // we bother checking before we place it on the stack is
+    // that it saves us even reading the node from disk as
+    // the MBR is already present in the parent node as well.
+
+    if(!this->should_visit(mbr.get())) {
+        goto done;
+    }
+
+    this->visitor->hits.visit_node();
+
+    if(node->isLeaf()) {
+        for(uint32_t i = 0; i < node->getChildrenCount(); i++) {
+
+            SidxShapePtr c_mbr = sidx_get_child_shape(node, i);
+
+            if(!this->query->intersectsShape(*(c_mbr.get()))) {
+                continue;
+            }
+
+            if(!this->should_visit(c_mbr.get())) {
+                continue;
+            }
+
+            this->visitor->hits.visit_data();
+
+            uint8_t* data;
+            uint32_t size;
+
+            node->getChildData(i, size, &data);
+
+            io::Bytes::Ptr buf = io::Bytes::proxy(data, size);
+            io::Reader::Ptr reader = io::Reader::create(buf);
+            io::Bytes::Ptr docid;
+            Entry::Ptr entry = this->visitor->reader->read_geo(reader, docid);
+            geo::Geom::Ptr geom = entry->get_geometry();
+
+            this->visitor->hits.push(docid, geom);
+        }
+    } else {
+        // The sort here is so that we fill the page as quickly as
+        // possible. We do this so that our checks for skipping
+        // nodes starts as early as possible in our traversals.
+
+        std::vector<std::pair<double, int64_t>> children;
+
+        for(uint32_t i = 0; i < node->getChildrenCount(); i++) {
+
+            SidxShapePtr c_mbr = sidx_get_child_shape(node, i);
+
+            if(!this->query->intersectsShape(*(c_mbr.get()))) {
+                continue;
+            }
+
+            if(!this->should_visit(c_mbr.get())) {
+                continue;
+            }
+
+            double d = this->query_center->getMinimumDistance(*(c_mbr.get()));
+            children.push_back(std::make_pair(d, node->getChildIdentifier(i)));
+        }
+
+        std::sort(children.begin(), children.end());
+
+        // This iteration is a bit odd but just allows us to
+        // place items on the stack in order of increasing
+        // distance rather than figure out the template magic
+        // to get the std::sort in the other direction.
+        while(children.size()) {
+            this->ids.push(children.back().second);
+            children.pop_back();
+        }
+    }
+
+done:
+    if(this->ids.empty()) {
+        hasNext = false;
+    } else {
+        hasNext = true;
+        next_id = ids.top();
+        ids.pop();
+    }
+}
+
+
+bool
+RTreePager::should_visit(const sidx::IShape* mbr)
+{
+    if(this->visitor->hits.size() < this->visitor->hits.limit) {
+        return true;
+    }
+
+    double min_dist = this->query_center->getMinimumDistance(*mbr);
+    double max_dist = this->visitor->hits.hits.top().distance;
+
+    return min_dist < max_dist;
 }
 
 
