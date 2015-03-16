@@ -241,7 +241,7 @@ search_entries(easton::Index::Ptr idx, io::Reader::Ptr reader)
         throw EastonException("Invalid argument for search.");
     }
 
-    if(arity < 7 || arity > 8) {
+    if(arity != 9) {
         throw EastonException("Invalid argument arity for search.");
     }
 
@@ -266,6 +266,7 @@ search_entries(easton::Index::Ptr idx, io::Reader::Ptr reader)
     bool nearest;
     uint64_t limit;
     bool include_geom;
+    bool debug = false;
 
     if(!reader->read(filter)) {
         throw EastonException("Invalid filter argument for search.");
@@ -284,7 +285,7 @@ search_entries(easton::Index::Ptr idx, io::Reader::Ptr reader)
     }
 
     Hit bookmark;
-    if(arity == 8) {
+    if(!reader->read_empty_list()) {
         if(!reader->read_tuple_n(2)) {
             throw EastonException("Invalid bookmark argument for search.");
         }
@@ -292,6 +293,10 @@ search_entries(easton::Index::Ptr idx, io::Reader::Ptr reader)
         if(!reader->read(bookmark.distance)) {
             throw EastonException("Invalid bookmark distance for search.");
         }
+    }
+
+    if(!reader->read(debug)) {
+        throw EastonException("Invalid debug argument for search.");
     }
 
     if(!reader->read_empty_list()) {
@@ -322,22 +327,54 @@ search_entries(easton::Index::Ptr idx, io::Reader::Ptr reader)
 
     // Send the results back to Erlang
     io::Writer::Ptr writer = io::Writer::create();
-    writer->start_tuple(2);
+
+    if(debug) {
+        writer->start_tuple(3);
+    } else {
+        writer->start_tuple(2);
+    }
+
     writer->write("ok");
-    writer->start_list(count);
-    for(uint32_t i = 0; i < count; i++) {
-        if(include_geom) {
-            writer->start_tuple(3);
-            writer->write(results[i].docid);
-            writer->write(results[i].distance);
-            writer->write(results[i].wkb);
-        } else {
-            writer->start_tuple(2);
-            writer->write(results[i].docid);
-            writer->write(results[i].distance);
+
+    if(count > 0) {
+        writer->start_list(count);
+        for(uint32_t i = 0; i < count; i++) {
+            if(include_geom) {
+                writer->start_tuple(3);
+                writer->write(results[i].docid);
+                writer->write(results[i].distance);
+                writer->write(results[i].wkb);
+            } else {
+                writer->start_tuple(2);
+                writer->write(results[i].docid);
+                writer->write(results[i].distance);
+            }
         }
     }
     writer->write_empty_list();
+
+    if(debug) {
+        writer->start_list(4);
+
+        writer->start_tuple(2);
+        writer->write("nodes_visited");
+        writer->write(collector.nodes_visited);
+
+        writer->start_tuple(2);
+        writer->write("leaves_visited");
+        writer->write(collector.leaves_visited);
+
+        writer->start_tuple(2);
+        writer->write("leaves_filtered");
+        writer->write(collector.leaves_filtered);
+
+        writer->start_tuple(2);
+        writer->write("leaves_dropped");
+        writer->write(collector.leaves_dropped);
+
+        writer->write_empty_list();
+    }
+
     return writer;
 }
 

@@ -818,6 +818,13 @@ GeomFilter::operator()(Geom::Ptr other)
 }
 
 
+Geom::Ptr
+GeomFilter::geom()
+{
+    return this->pg->base;
+}
+
+
 Ctx::Ptr
 Ctx::create(uint32_t dimensions, SRID::Ptr srid)
 {

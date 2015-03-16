@@ -255,11 +255,15 @@ search({IndexType, Index}, Query, Opts) ->
         get_filter(Opts),
         get_nearest(Opts),
         get_limit(Opts),
-        get_include_geom(Opts)
-    ] ++ get_bookmark(Opts),
+        get_include_geom(Opts),
+        get_bookmark(Opts),
+        get_debug(Opts)
+    ],
     case cmd(Index, ?EASTON_COMMAND_SEARCH, Arg) of
         {ok, Results} ->
             {ok, lists:map(fun fmt_result/1, Results)};
+        {ok, Results, Debug} ->
+            {ok, lists:map(fun fmt_result/1, Results), Debug};
         Else ->
             throw(Else)
     end.
@@ -678,13 +682,22 @@ get_include_geom(Opts) ->
 get_bookmark(Opts) ->
     case lists:keyfind(bookmark, 1, Opts) of
         {_, {DocId, Dist}} when is_binary(DocId), is_number(Dist) ->
-            [{DocId, float(Dist)}];
+            {DocId, float(Dist)};
         {_, undefined} ->
             [];
         {_, Else} ->
             throw({invalid_bookmark, Else});
         false ->
             []
+    end.
+
+
+get_debug(Opts) ->
+    case proplists:get_value(debug, Opts) of
+        true ->
+            true;
+        _ ->
+            false
     end.
 
 

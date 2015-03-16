@@ -12,6 +12,7 @@
 
 
 using namespace easton;
+namespace sidx = SpatialIndex;
 
 
 NS_EASTON_BEGIN
@@ -52,11 +53,19 @@ class TopHits
         void push(io::Bytes::Ptr docid, geo::Geom::Ptr geom);
         Hit pop();
 
+        void visit_node();
+        void visit_data();
+
         std::priority_queue<Hit, std::vector<Hit>, HitCmp> hits;
         HitCmp cmp;
         Hit bookmark;
         geo::GeomFilter filt;
         uint32_t limit;
+
+        uint64_t nodes_visited;
+        uint64_t leaves_visited;
+        uint64_t leaves_filtered;
+        uint64_t leaves_dropped;
 };
 
 
@@ -253,6 +262,26 @@ class EntryVisitor: public SpatialIndex::IVisitor
         geo::Ctx::Ptr ctx;
         EntryReader::Ptr reader;
         TopHits& hits;
+};
+
+
+class RTreePager : public sidx::IQueryStrategy
+{
+    public:
+        RTreePager(EntryVisitor* visitor, sidx::IShape* query);
+        ~RTreePager();
+
+        void getNextEntry(const sidx::IEntry& entry,
+                            int64_t& next_id, bool& hasNext);
+
+    private:
+        bool should_visit(const sidx::IShape* mbr);
+
+        std::stack<int64_t> ids;
+
+        EntryVisitor* visitor;
+        sidx::IShape* query;
+        sidx::IShape* query_center;
 };
 
 
