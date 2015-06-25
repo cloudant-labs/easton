@@ -63,8 +63,10 @@
 open(Directory) ->
     open(Directory, []).
 
+open(Directory, Opts) when is_binary(Directory) ->
+    open(binary_to_list(Directory), Opts);
 
-open(Directory, Opts) ->
+open(Directory, Opts) when is_list(Directory) ->
     ensure_idx_dir(Directory),
 
     CsMapDir = get_cs_map_dir(Opts),
