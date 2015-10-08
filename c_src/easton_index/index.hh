@@ -27,16 +27,13 @@ class Hit
         Hit();
         Hit(io::Bytes::Ptr docid, geo::Geom::Ptr geom, double distance);
 
+        friend bool operator<(const Hit &h1, const Hit &h2);
+        friend bool operator<=(const Hit &h1, const Hit &h2);
+
         io::Bytes::Ptr docid;
         geo::Geom::Ptr geom;
         io::Bytes::Ptr wkb;
         double distance;
-};
-
-
-struct HitCmp
-{
-    bool operator()(Hit const &h1, Hit const &h2);
 };
 
 
@@ -56,8 +53,7 @@ class TopHits
         void visit_node();
         void visit_data();
 
-        std::priority_queue<Hit, std::vector<Hit>, HitCmp> hits;
-        HitCmp cmp;
+        std::priority_queue<Hit, std::vector<Hit>> hits;
         Hit bookmark;
         geo::GeomFilter filt;
         uint32_t limit;

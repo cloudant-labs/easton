@@ -61,6 +61,7 @@ sidx_properties(IndexH index)
 
 Hit::Hit()
 {
+    this->docid = io::Bytes::create(0);
     this->distance = -1.0;
 }
 
@@ -74,25 +75,14 @@ Hit::Hit(io::Bytes::Ptr docid, geo::Geom::Ptr geom, double distance)
 
 
 bool
-HitCmp::operator()(Hit const &h1, Hit const &h2) {
+operator<(const Hit &h1, const Hit &h2) {
     // First order by distance.
 
-    if(h1.distance <= h2.distance) {
+    if(h1.distance < h2.distance) {
         return true;
     }
 
     if(h1.distance > h2.distance) {
-        return false;
-    }
-
-    // Use the document ID to break ties. Empty
-    // document IDs sort first.
-
-    if(!h1.docid) {
-        return true;
-    }
-
-    if(!h2.docid) {
         return false;
     }
 
@@ -102,9 +92,39 @@ HitCmp::operator()(Hit const &h1, Hit const &h2) {
     uint32_t d1 = h1.docid->size();
     uint32_t d2 = h2.docid->size();
     uint32_t len = d1 < d2 ? d1 : d2;
+
+    // Check for empty ids
+
+    if(d1 == 0 && d2 == 0) {
+        return false;
+    } else if(d1 == 0) {
+        return true;
+    } else if(d2 == 0) {
+        return false;
+    }
+
     int r = memcmp(h1.docid->get(), h2.docid->get(), len);
 
-    return r <= 0;
+    if(r < 0) {
+        return true;
+    } else if(r == 0) {
+        return d1 < d2;
+    }
+
+    return false;
+}
+
+bool
+operator<=(const Hit &h1, const Hit &h2) {
+    if(h1 < h2) {
+        return true;
+    }
+
+    if(h2 < h1) {
+        return false;
+    }
+
+    return true;
 }
 
 
@@ -141,7 +161,7 @@ TopHits::distance(io::Bytes::Ptr docid, geo::Geom::Ptr geom)
 
     // Ignore anything closer than our configured
     // bookmark.
-    if(this->cmp(maybe_hit, this->bookmark)) {
+    if(maybe_hit <= this->bookmark) {
         return DBL_MAX;
     }
 
@@ -177,7 +197,7 @@ TopHits::push(io::Bytes::Ptr docid, geo::Geom::Ptr geom)
 
     if(this->hits.size() < limit) {
         this->hits.push(hit);
-    } else if(this->cmp(hit, this->hits.top())) {
+    } else if(hit < this->hits.top()) {
         this->hits.pop();
         this->hits.push(hit);
     } else {
