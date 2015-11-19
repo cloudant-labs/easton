@@ -297,14 +297,13 @@ io::Bytes::Ptr
 Geom::to_wkb()
 {
     uint8_t* wkb;
-    uint32_t wkblen;
+    size_t wkblen;
     io::Bytes::Ptr ret;
 
     GEOSWKBWriter* writer = GEOSWKBWriter_create_r(this->ctx->ctx);
     GEOSWKBWriter_setOutputDimension_r(this->ctx->ctx, writer,
             this->ctx->dimensions);
-    wkb = GEOSWKBWriter_write_r(this->ctx->ctx,
-            writer, this->ro_g, (unsigned long*) &wkblen);
+    wkb = GEOSWKBWriter_write_r(this->ctx->ctx, writer, this->ro_g, &wkblen);
 
     if(wkb) {
         ret = io::Bytes::copy(wkb, wkblen);
