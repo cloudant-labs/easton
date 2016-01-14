@@ -958,7 +958,13 @@ Ctx::geom_from_reader(io::Reader::Ptr reader, SRID::Ptr srid)
             throw EastonException("Invalid radius for circle.");
         }
 
-        return this->make_circle(x, y, r, srid);
+	//Implementation is to create a geometry to perform the query with, to 
+	//ensure correct results when using data in equiangular angular projections
+	//use make_ellipse here with the two axes set to r. This ensures correct
+	//results for CRS84/WGS84 data in both longitude and latitude. Otherwise, at
+	//high latitudes the implementation of the circle means that a much greater
+	//sampling in latitude occurs
+	return this->make_ellipse(x, y, r, r, srid);
     }
 
     if(qtype == "ellipse") {
@@ -1313,11 +1319,6 @@ Ctx::make_ellipse(double x, double y, double x_range, double y_range,
     // see the definition of make_circle above that includes
     // the srid. The only difference here is that we calculate
     // two distances for the X and Y directions.
-    //
-    // TODO: Ask Norman if we can't just re-implement make_circle
-    // by passing radius as both x_range and y_range. It seems like
-    // it'd be more accurate in terms of the ellipsoidal calcualtions
-    // but perhaps the geometry generation isn't as good here.
 
     double xyz[3];
 
