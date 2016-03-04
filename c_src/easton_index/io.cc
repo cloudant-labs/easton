@@ -417,7 +417,7 @@ Reader::read_bytes()
     Bytes::Ptr b = Bytes::create(bytes);
     if(ei_decode_binary(
             (char*) this->data->get(), &(this->pos),
-            b->get(), (long*) &bytes) != 0) {
+            b->get(), NULL) != 0) {
         return Bytes::Ptr();
     }
 
