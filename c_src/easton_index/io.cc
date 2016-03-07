@@ -388,7 +388,7 @@ Reader::read(std::string& val)
     } else if(type == ERL_BINARY_EXT) {
         if(ei_decode_binary(
                 (char*) this->data->get(), &(this->pos),
-                (void*) val.data(), (long*) &bytes) != 0) {
+                (void*) val.data(), NULL) != 0) {
             return false;
         }
     } else {
