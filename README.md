@@ -14,18 +14,18 @@ Easton consists of the following Erlang source files:
 - **easton_index.erl** - takes index operating requests from hastings and passes them through to the C++ based spatial index, search/query and re-projection routines
 
 Easton also consists of the following C++ source files:
-- **command.cc** -
+- **command.cc** - provides multiple easton commands for execution, including "get information of index", "synchronize index", "close index", "search against Geo entries", "remove or update entry", "put, get or delete user’s key and value".
 - **epsg.cc** - optimisation to reduce reliance on slow to initialise CSMap routines.
-- **geo.cc** - various geospatial operations, including implementation of relations and circle and ellipse queries
-- **index.cc** -
-- **init.cc** -
+- **geo.cc** - various geospatial operations, including implementation of relations and circle and ellipse queries.
+- **index.cc** - create, manage and use index by leveraging C APIs provided by libspatialindex, and encapsulate Geo entry using SpatialEntry, TemporalEntry, HistoricalEntry and TopHits.
+- **init.cc** - initial routines for signals, csmap, pid, etc.
 - **io.cc** - io routines for port comms and wrapper around LevelDB (used for storing data about the index)
 - **main.cc** - creates index objects, creation includes several checks done by geo.cc, however those checks are only caught at the very top level of easton_index and means uninformative error messages are passed back to the user. See FB case 57954 (https://cloudant.fogbugz.com/f/cases/57954/Error-messages-on-invalid-EPSG-code-specified-in-design-document-not-useful-to-users)
 - **reproject.cc** - performs reprojection of geometries. Done by libgeos.
 
 and the following relevant header files:
-- **config.hh** -
-- **easton.hh** -
+- **config.hh** - defines constants of easton, including index type, command name, filter type, error code.
+- **easton.hh** - defines constants for namespace of "easton", "cmd", "geo" and "io".
 - **exceptions.hh** - defines exceptions thrown by easton_index process, these should find their way either to logs or to the user. Exceptions defined for index errors, geo errors easton errors and easton exits.
 
 Logs
