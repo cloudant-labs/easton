@@ -292,6 +292,26 @@ class RTreePager : public sidx::IQueryStrategy
 };
 
 
+class NNRTreePager : public sidx::IQueryStrategy
+{
+    public:
+        NNRTreePager(EntryVisitor* visitor, sidx::IShape* query, NNComparator* nn);
+        ~NNRTreePager();
+
+        void getNextEntry(const sidx::IEntry& entry,
+                            int64_t& next_id, bool& hasNext);
+
+    private:
+        bool should_visit(const sidx::IShape* mbr);
+
+        std::stack<int64_t> ids;
+
+        EntryVisitor* visitor;
+        sidx::IShape* query;
+        NNComparator* nnc;
+};
+
+
 class Index
 {
     public:

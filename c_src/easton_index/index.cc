@@ -420,7 +420,8 @@ SpatialEntry::search(Index* idx, TopHits& collector, bool nearest)
 
     if(nearest) {
         NNComparator nnc(idx->get_geo_ctx(), idx->get_reader(), collector);
-        index->index().nearestNeighborQuery(collector.limit, r, visitor, nnc);
+        NNRTreePager pager(&visitor, &r, &nnc);
+        index->index().queryStrategy(pager);
     } else {
         RTreePager pager(&visitor, &r);
         index->index().queryStrategy(pager);
@@ -1404,6 +1405,167 @@ RTreePager::should_visit(const sidx::IShape* mbr)
     double max_dist = this->visitor->hits.hits.top().distance;
 
     return min_dist < max_dist;
+}
+
+NNRTreePager::NNRTreePager(EntryVisitor* visitor, sidx::IShape* query, NNComparator* nnc)
+{
+    this->visitor = visitor;
+    this->query = query;
+    this->nnc = nnc;
+
+    geo::Geom::Ptr g = this->visitor->hits.filt.geom();
+    geo::Bounds::Ptr b = g->get_centroid()->get_bounds();
+
+}
+
+
+NNRTreePager::~NNRTreePager()
+{
+}
+
+
+void
+NNRTreePager::getNextEntry(const SpatialIndex::IEntry& entry,
+        int64_t& next_id, bool& hasNext)
+{
+    const sidx::INode* node = dynamic_cast<const sidx::INode*>(&entry);
+    SidxShapePtr mbr = sidx_get_shape(&entry);
+
+    // using relation filter to exclude entries which doesn't satisfy condition
+    SpatialIndex::Region mbr_region;
+    sidx::IShape* s;
+    entry.getShape(&s);
+    s->getMBR(mbr_region);
+    geo::Ctx::Ptr geo_ctx = this->visitor->ctx;
+    geo::Geom::Ptr geom = geo_ctx->make_rectangle((mbr_region.m_pLow),
+                                                  (mbr_region.m_pHigh),
+                                                  (mbr_region.m_dimension),
+                                                  geo_ctx->get_srid());
+    if (!this->visitor->hits.filt(geom)) {
+       goto done;
+    }
+
+    // The magic dust in our new tree traversal is this test
+    // that can determine whether we need to inspect a given
+    // node based on the minimum distance between the center
+    // of the query and the MBR of the node. If that minimum
+    // distance is larger than the last entry on the current
+    // page we know that we don't have to bother even looking
+    // at the node.
+    //
+    // The astute reader will realize that we're filtering
+    // both before and after we add the node id to the stack.
+    // This is because the data for our current page changes
+    // inbetween so we need to check both times. The reason
+    // we bother checking before we place it on the stack is
+    // that it saves us even reading the node from disk as
+    // the MBR is already present in the parent node as well.
+
+    if(!this->should_visit(mbr.get())) {
+        goto done;
+    }
+
+    this->visitor->hits.visit_node();
+
+    if(node->isLeaf()) {
+        for(uint32_t i = 0; i < node->getChildrenCount(); i++) {
+
+            SidxShapePtr c_mbr = sidx_get_child_shape(node, i);
+
+            // using relation filter to exclude leaf which doesn't satisfy condition
+            c_mbr->getMBR(mbr_region);
+            geo::Ctx::Ptr geo_ctx = this->visitor->ctx;
+            geo::Geom::Ptr c_geom = geo_ctx->make_rectangle((mbr_region.m_pLow),
+                                                            (mbr_region.m_pHigh),
+                                                            (mbr_region.m_dimension),
+                                                            geo_ctx->get_srid());
+
+            if (!this->visitor->hits.filt(c_geom)) {
+                continue;
+            }
+
+            if(!this->should_visit(c_mbr.get())) {
+                continue;
+            }
+
+            this->visitor->hits.visit_data();
+
+            uint8_t* data;
+            uint32_t size;
+
+            node->getChildData(i, size, &data);
+
+            io::Bytes::Ptr buf = io::Bytes::proxy(data, size);
+            io::Reader::Ptr reader = io::Reader::create(buf);
+            io::Bytes::Ptr docid;
+            Entry::Ptr entry = this->visitor->reader->read_geo(reader, docid);
+            geo::Geom::Ptr geom = entry->get_geometry();
+
+            this->visitor->hits.push(docid, geom);
+        }
+    } else {
+        // The sort here is so that we fill the page as quickly as
+        // possible. We do this so that our checks for skipping
+        // nodes starts as early as possible in our traversals.
+
+        std::vector<std::pair<double, int64_t>> children;
+
+        for(uint32_t i = 0; i < node->getChildrenCount(); i++) {
+
+            SidxShapePtr c_mbr = sidx_get_child_shape(node, i);
+
+            if(!this->should_visit(c_mbr.get())) {
+                continue;
+            }
+
+            // using relation filter to exclude node which doesn't satisfy condition
+            c_mbr->getMBR(mbr_region);
+            geo::Ctx::Ptr geo_ctx = this->visitor->ctx;
+            geo::Geom::Ptr c_geom = geo_ctx->make_rectangle((mbr_region.m_pLow),
+                                                            (mbr_region.m_pHigh),
+                                                            (mbr_region.m_dimension),
+                                                            geo_ctx->get_srid());
+
+            if (!this->visitor->hits.filt(c_geom)) {
+                continue;
+            }
+
+            double d = this->nnc->getMinimumDistance(*query,*(c_mbr.get()));
+            children.push_back(std::make_pair(d, node->getChildIdentifier(i)));
+        }
+
+        std::sort(children.begin(), children.end());
+
+        // This iteration is a bit odd but just allows us to
+        // place items on the stack in order of increasing
+        // distance rather than figure out the template magic
+        // to get the std::sort in the other direction.
+        while(children.size()) {
+            this->ids.push(children.back().second);
+            children.pop_back();
+        }
+    }
+
+done:
+    if(this->ids.empty()) {
+        hasNext = false;
+    } else {
+        hasNext = true;
+        next_id = ids.top();
+        ids.pop();
+    }
+}
+
+
+bool
+NNRTreePager::should_visit(const sidx::IShape* mbr)
+{
+    if(this->visitor->hits.size() < this->visitor->hits.limit) {
+        return true;
+    } else {
+        // to be done
+        return true;
+    }
 }
 
 
