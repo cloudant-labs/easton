@@ -74,6 +74,10 @@ main(int argc, const char* argv[])
 
         io::Reader::Ptr reader = io::Reader::recv();
 
+        if(reader == NULL) {
+            throw EastonException("Error getting data from reader.");
+        }
+
         if(!reader->read_tuple_n(2)) {
             throw EastonException("Invalid command tuple.");
         }
