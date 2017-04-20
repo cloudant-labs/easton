@@ -1,3 +1,14 @@
+// Licensed under the Apache License, Version 2.0 (the "License"); you may not
+// use this file except in compliance with the License. You may obtain a copy of
+// the License at
+//
+//   http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+// WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+// License for the specific language governing permissions and limitations under
+// the License.
 
 #include <stdarg.h>
 
@@ -958,7 +969,7 @@ Ctx::geom_from_reader(io::Reader::Ptr reader, SRID::Ptr srid)
             throw EastonException("Invalid radius for circle.");
         }
 
-	//Implementation is to create a geometry to perform the query with, to 
+	//Implementation is to create a geometry to perform the query with, to
 	//ensure correct results when using data in equiangular angular projections
 	//use make_ellipse here with the two axes set to r. This ensures correct
 	//results for CRS84/WGS84 data in both longitude and latitude. Otherwise, at
