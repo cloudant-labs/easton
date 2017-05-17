@@ -39,7 +39,7 @@ close_idx(Idx) ->
 
 bookmark_test_() ->
     {"Bookmark Tests",
-        {timeout, 10, [
+        {timeout, 100, [
             {setup,
                 fun open_idx/0,
                 fun close_idx/1,
