@@ -326,8 +326,10 @@ handle_call({cmd, C}, _From, #st{port = Port} = St) ->
     receive
         {Port, {data, Resp}} ->
             {reply, Resp, St};
-        Else ->
-            throw({error, Else})
+         {Port, Else} ->
+            throw({error, Else});
+         {'EXIT', Port, Reason} ->
+            throw({error, Reason})
     after ?TIMEOUT ->
             exit({timeout, C})
     end;
