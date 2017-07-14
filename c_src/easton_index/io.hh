@@ -22,7 +22,7 @@
 #include <leveldb/db.h>
 #include <leveldb/write_batch.h>
 #include <spatialindex/capi/sidx_api.h>
-#include <spatialindex/capi/CustomStorage.h>
+#include <spatialindex/capi/sidx_impl.h>
 
 #include "ei.h"
 
