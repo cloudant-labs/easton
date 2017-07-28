@@ -32,6 +32,7 @@
     doc_count/1,
     geom_count/1,
     os_pid/1,
+    disk_size/1,
 
     update/3,
     remove/2,
@@ -783,6 +784,15 @@ kill_cmd(OsPid) ->
 
 get_disk_size(Idx) ->
     IdxDir = gen_server:call(Idx, idx_dir, infinity),
+    disk_size_int(IdxDir).
+
+
+disk_size(IdxDir) ->
+    DiskSize = disk_size_int(IdxDir),
+    {ok, [{disk_size, DiskSize}]}.
+
+
+disk_size_int(IdxDir) ->
     Pattern0 = filename:join(IdxDir, "*"),
     Pattern = case Pattern0 of
         _ when is_binary(Pattern0) ->
