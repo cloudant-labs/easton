@@ -521,9 +521,8 @@ Writer::Writer()
 
 Writer::~Writer()
 {
-    if(ei_x_free(this->buff.get()) != 0) {
-        throw EastonException("Error destroying Writer buffer.");
-    }
+    ei_x_free(this->buff.get());
+
 }
 
 
