@@ -148,6 +148,13 @@ destroy(Directory, Opts) ->
         false ->
             throw({invalid_index, Directory})
     end,
+    try
+        LockFile = binary_to_list(Directory) ++ "/LOCK",
+        RmCmd = rm_cmd(LockFile),
+        os:cmd(RmCmd)
+    catch E:T ->
+        io:format("Failed to remove lock file: ~p ~p", [E, T])
+    end,
 
     CsMapDir = get_cs_map_dir(Opts),
     Env = {env, [{"EASTON_CS_MAP_DIR", CsMapDir}]},
@@ -779,6 +786,14 @@ kill_cmd(OsPid) ->
         {win32, _} -> "taskkill /PID ~b"
     end,
     lists:flatten(io_lib:format(Fmt, [OsPid])).
+
+
+rm_cmd(FileName) ->
+    Fmt = case os:type() of
+        {unix, _} -> "rm ~p";
+        {win32, _} -> "del ~p"
+    end,
+    lists:flatten(io_lib:format(Fmt, [FileName])).
 
 
 get_disk_size(Idx) ->
