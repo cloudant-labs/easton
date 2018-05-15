@@ -54,6 +54,7 @@
 ]).
 
 
+-include_lib("couch/include/couch_eunit.hrl").
 -include("easton_constants.hrl").
 -define(EASTON_LOCAL_CS_MAP_DIR, "/usr/local/share/CsMap/dict").
 
@@ -104,6 +105,7 @@ open(Directory, Opts) when is_list(Directory) ->
 
 
 close({_IndexType, Index}) ->
+    ?debugFmt("easton_index close ... ~n~p~n", [{_IndexType, Index}]),
     Ref = erlang:monitor(process, Index),
     try gen_server:call(Index, close) of
         BinResp when is_binary(BinResp) ->
@@ -111,8 +113,10 @@ close({_IndexType, Index}) ->
                 {ok, true} ->
                     receive
                         {'DOWN', Ref, process, Index, _} ->
+                            ?debugFmt("easton_index:close down ... ~n~p~n", [_IndexType]),
                             ok
                     after ?TIMEOUT ->
+                        ?debugFmt("easton_index:close timeout ... ~n~p~n", [?TIMEOUT]),
                         erlang:demonitor(Ref, [flush]),
                         throw({timeout, close})
                     end;
@@ -120,9 +124,11 @@ close({_IndexType, Index}) ->
                     throw(Else)
                 end;
         Else ->
+            ?debugFmt("easton_index:close Else ... ~n~p~n", [Else]),
             erlang:demonitor(Ref, [flush]),
             throw(Else)
     catch exit:{noproc, _} ->
+        ?debugFmt("easton_index:close noproc ... ~n~p~n", [Ref]),
         erlang:demonitor(Ref, [flush]),
         ok
     end.
@@ -142,19 +148,20 @@ destroy(Directory) ->
 
 
 destroy(Directory, Opts) ->
+    ?debugFmt("easton_index destroy ... ~n~p~n", [Directory]),
     case filelib:is_dir(Directory) of
         true ->
             ok;
         false ->
             throw({invalid_index, Directory})
     end,
-    try
-        LockFile = binary_to_list(Directory) ++ "/LOCK",
-        RmCmd = rm_cmd(LockFile),
-        os:cmd(RmCmd)
-    catch E:T ->
-        io:format("Failed to remove lock file: ~p ~p", [E, T])
-    end,
+%%    try
+%%        LockFile = binary_to_list(Directory) ++ "/LOCK",
+%%        RmCmd = rm_cmd(LockFile),
+%%        os:cmd(RmCmd)
+%%    catch E:T ->
+%%        io:format("Failed to remove lock file: ~p ~p", [E, T])
+%%    end,
 
     CsMapDir = get_cs_map_dir(Opts),
     Env = {env, [{"EASTON_CS_MAP_DIR", CsMapDir}]},
