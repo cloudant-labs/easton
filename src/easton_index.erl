@@ -54,6 +54,7 @@
 ]).
 
 
+-include_lib("couch/include/couch_eunit.hrl").
 -include("easton_constants.hrl").
 -define(EASTON_LOCAL_CS_MAP_DIR, "/usr/local/share/CsMap/dict").
 
@@ -70,6 +71,8 @@
 -define(EXE_NAME, "easton_index").
 -define(PORT_OPTS, [{packet, 4}, binary, exit_status, nouse_stdio, hide]).
 -define(TIMEOUT, 300000).
+-define(LOCK_RELEASE_TIMEOUT, 5000).
+-define(LOCK_RELEASE_DELAY, 100).
 
 
 open(Directory) ->
@@ -104,6 +107,7 @@ open(Directory, Opts) when is_list(Directory) ->
 
 
 close({_IndexType, Index}) ->
+    ?debugFmt("easton_index close ... ~n~p~n", [{_IndexType, Index}]),
     Ref = erlang:monitor(process, Index),
     try gen_server:call(Index, close) of
         BinResp when is_binary(BinResp) ->
@@ -111,8 +115,10 @@ close({_IndexType, Index}) ->
                 {ok, true} ->
                     receive
                         {'DOWN', Ref, process, Index, _} ->
+                            ?debugFmt("easton_index:close down ... ~n~p~n", [_IndexType]),
                             ok
                     after ?TIMEOUT ->
+                        ?debugFmt("easton_index:close timeout ... ~n~p~n", [?TIMEOUT]),
                         erlang:demonitor(Ref, [flush]),
                         throw({timeout, close})
                     end;
@@ -120,9 +126,11 @@ close({_IndexType, Index}) ->
                     throw(Else)
                 end;
         Else ->
+            ?debugFmt("easton_index:close Else ... ~n~p~n", [Else]),
             erlang:demonitor(Ref, [flush]),
             throw(Else)
     catch exit:{noproc, _} ->
+        ?debugFmt("easton_index:close noproc ... ~n~p~n", [Ref]),
         erlang:demonitor(Ref, [flush]),
         ok
     end.
@@ -142,12 +150,25 @@ destroy(Directory) ->
 
 
 destroy(Directory, Opts) ->
+    ?debugFmt("easton_index destroy ... ~n~p~n", [Directory]),
     case filelib:is_dir(Directory) of
         true ->
             ok;
         false ->
             throw({invalid_index, Directory})
     end,
+%%    try
+%%        LockFile = binary_to_list(Directory) ++ "/LOCK",
+%%        RmCmd = rm_cmd(LockFile),
+%%        os:cmd(RmCmd)
+%%    catch E:T ->
+%%        io:format("Failed to remove lock file: ~p ~p", [E, T])
+%%    end,
+    ?debugFmt("easton_index before wait_for_local_release ... ~n~p~n", [Directory]),
+
+    ok = wait_for_lock_release(Directory),
+    ?debugFmt("easton_index after wait_for_local_release ... ~n~p~n", [Directory]),
+
 
     CsMapDir = get_cs_map_dir(Opts),
     Env = {env, [{"EASTON_CS_MAP_DIR", CsMapDir}]},
@@ -779,6 +800,35 @@ kill_cmd(OsPid) ->
         {win32, _} -> "taskkill /PID ~b"
     end,
     lists:flatten(io_lib:format(Fmt, [OsPid])).
+
+
+rm_cmd(FileName) ->
+    Fmt = case os:type() of
+        {unix, _} -> "rm ~p";
+        {win32, _} -> "del ~p"
+    end,
+    lists:flatten(io_lib:format(Fmt, [FileName])).
+
+
+wait_for_lock_release(Directory) ->
+    LockFile = <<Directory/binary, "/LOCK">>,
+    wait_for_lock_release(LockFile, os:timestamp()).
+
+
+wait_for_lock_release(LockFile, Started) ->
+    ?debugFmt("wait_for_lock_release LockFile ... ~n~p~n", [LockFile]),
+
+    case filelib:is_file(LockFile) of
+        false ->
+            ok;
+        true ->
+            Elapsed = timer:now_diff(os:timestamp(), Started) / 1000,
+            if Elapsed < ?LOCK_RELEASE_TIMEOUT -> ok; true ->
+                erlang:error({timeout, lock_release})
+            end,
+            timer:sleep(?LOCK_RELEASE_DELAY),
+            wait_for_lock_release(LockFile, Started)
+    end.
 
 
 get_disk_size(Idx) ->
