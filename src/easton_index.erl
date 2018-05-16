@@ -71,6 +71,8 @@
 -define(EXE_NAME, "easton_index").
 -define(PORT_OPTS, [{packet, 4}, binary, exit_status, nouse_stdio, hide]).
 -define(TIMEOUT, 300000).
+-define(LOCK_RELEASE_TIMEOUT, 5000).
+-define(LOCK_RELEASE_DELAY, 100).
 
 
 open(Directory) ->
@@ -162,6 +164,11 @@ destroy(Directory, Opts) ->
 %%    catch E:T ->
 %%        io:format("Failed to remove lock file: ~p ~p", [E, T])
 %%    end,
+    ?debugFmt("easton_index before wait_for_local_release ... ~n~p~n", [Directory]),
+
+    ok = wait_for_lock_release(Directory),
+    ?debugFmt("easton_index after wait_for_local_release ... ~n~p~n", [Directory]),
+
 
     CsMapDir = get_cs_map_dir(Opts),
     Env = {env, [{"EASTON_CS_MAP_DIR", CsMapDir}]},
@@ -801,6 +808,27 @@ rm_cmd(FileName) ->
         {win32, _} -> "del ~p"
     end,
     lists:flatten(io_lib:format(Fmt, [FileName])).
+
+
+wait_for_lock_release(Directory) ->
+    LockFile = <<Directory/binary, "/LOCK">>,
+    wait_for_lock_release(LockFile, os:timestamp()).
+
+
+wait_for_lock_release(LockFile, Started) ->
+    ?debugFmt("wait_for_lock_release LockFile ... ~n~p~n", [LockFile]),
+
+    case filelib:is_file(LockFile) of
+        false ->
+            ok;
+        true ->
+            Elapsed = timer:now_diff(os:timestamp(), Started) / 1000,
+            if Elapsed < ?LOCK_RELEASE_TIMEOUT -> ok; true ->
+                erlang:error({timeout, lock_release})
+            end,
+            timer:sleep(?LOCK_RELEASE_DELAY),
+            wait_for_lock_release(LockFile, Started)
+    end.
 
 
 get_disk_size(Idx) ->
