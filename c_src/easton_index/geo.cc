@@ -1390,8 +1390,9 @@ Geom::Ptr
 Ctx::make_ellipse_int(double x, double y, double x_range, double y_range)
 {
     geos::geom::PrecisionModel pm;
-    geos::geom::GeometryFactory gf(&pm);
-    geos::util::GeometricShapeFactory sf(&gf);
+    geos::geom::GeometryFactory::Ptr gf =
+            geos::geom::GeometryFactory::create(&pm, -1);
+    geos::util::GeometricShapeFactory sf(gf.get());
 
     sf.setCentre(geos::geom::Coordinate(x, y));
     sf.setWidth(x_range * 2.0);
