@@ -15,6 +15,9 @@
 #include <string>
 #include <sstream>
 
+// Acknowledge use of unstable C++ API
+#define USE_UNSTABLE_GEOS_CPP_API
+
 #include <geos/geom/Coordinate.h>
 #include <geos/geom/GeometryFactory.h>
 #include <geos/geom/Polygon.h>
