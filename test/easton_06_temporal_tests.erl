@@ -84,7 +84,7 @@ moving_shape_test(Idx) ->
     NumShapes = length(Triples),
     ?assertEqual({ok, NumShapes}, easton_index:doc_count(Idx)),
 
-    lists:foreach(fun({Name, Shape, MovingShape}) ->
+    lists:foreach(fun({Name, _Shape, _MovingShape}) ->
         ?assertEqual(ok, easton_index:remove(Idx, Name))
     end, Triples),
 

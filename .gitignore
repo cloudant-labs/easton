@@ -5,3 +5,9 @@
 ebin/
 priv/easton_index
 
+.idea
+_build
+idx
+*.d
+*.lock
+.DS_Store
