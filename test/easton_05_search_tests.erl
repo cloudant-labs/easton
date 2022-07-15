@@ -285,8 +285,8 @@ gen_point(inner) ->
     % Inner square is easy square. The
     % slightly-less than 1 and 2 numbers
     % are to avoid edge effects for queries.
-    X = 1.999 * random:uniform() - 0.999,
-    Y = 1.999 * random:uniform() - 0.999,
+    X = 1.999 * rand:uniform() - 0.999,
+    Y = 1.999 * rand:uniform() - 0.999,
     {X, Y};
 gen_point(outer) ->
     % Outer square is harder square.
@@ -294,9 +294,9 @@ gen_point(outer) ->
     % in a unit square and then transposing it
     % randomly to one of the twelve possible unit
     % squares that make up the outer ring.
-    X = random:uniform(),
-    Y = random:uniform(),
-    S = random:uniform(12),
+    X = rand:uniform(),
+    Y = rand:uniform(),
+    S = rand:uniform(12),
     % This numbering starts in the top left
     % and runs clockwise.
     {OffX, OffY} = case S of

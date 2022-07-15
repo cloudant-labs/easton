@@ -86,7 +86,7 @@ historical_shape_test(Idx) ->
     NumShapes = length(Triples),
     ?assertEqual({ok, NumShapes}, easton_index:doc_count(Idx)),
 
-    lists:foreach(fun({Name, Shape, HistoricalShape}) ->
+    lists:foreach(fun({Name, _Shape, _HistoricalShape}) ->
         ?assertEqual(ok, easton_index:remove(Idx, Name))
     end, Triples),
 
