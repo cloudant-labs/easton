@@ -1,0 +1,28 @@
+% vim: set ft=erlang : -*- erlang -*- % Magic lines for code editors
+HomebrewPrefix = case os:type() of
+    {_ ,darwin} ->
+        string:trim(os:cmd("brew --prefix"));
+    _ ->
+        "/usr/local"
+end,
+
+[
+    {port_specs, [
+        {"priv/easton_index", [
+            "c_src/easton_index/*.cc"
+        ]}
+    ]},
+    {port_env, [
+        {"CXXFLAGS", "$CXXFLAGS -std=c++0x -g -Wall -Werror"},
+        {"EXE_LDFLAGS",
+            "$EXE_LDFLAGS -lCsMap -lspatialindex -lspatialindex_c -lgeos -lgeos_c -lleveldb"},
+        {"EXE_LINK_TEMPLATE",
+            "$CXX $PORT_IN_FILES $LDFLAGS $EXE_LDFLAGS -o $PORT_OUT_FILE"},
+        {"darwin", "EXE_CFLAGS",  "$EXE_CFLAGS -I" ++ HomebrewPrefix ++ "/include"},
+        {"darwin", "EXE_LDFLAGS", "$EXE_LDFLAGS -L" ++ HomebrewPrefix ++ "/lib"}
+    ]},
+    {eunit_opts, [
+        verbose
+    ]}
+].
+
