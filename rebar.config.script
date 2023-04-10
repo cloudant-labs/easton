@@ -13,7 +13,7 @@ end,
         ]}
     ]},
     {port_env, [
-        {"CXXFLAGS", "$CXXFLAGS -std=c++0x -g -Wall -Werror"},
+        {"CXXFLAGS", "$CXXFLAGS -std=c++0x -g -Wall -Werror -Wno-error=deprecated-declarations"},
         {"EXE_LDFLAGS",
             "$EXE_LDFLAGS -lCsMap -lspatialindex -lspatialindex_c -lgeos -lgeos_c -lleveldb"},
         {"EXE_LINK_TEMPLATE",
